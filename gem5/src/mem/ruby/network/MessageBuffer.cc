@@ -40,7 +40,7 @@ using namespace std;
 using m5::stl_helpers::operator<<;
 
 MessageBuffer::MessageBuffer(const Params *p)
-    : SimObject(p),
+    : SimObject(p), m_stall_map_size(0),
     m_max_size(p->buffer_size), m_time_last_time_size_checked(0),
     m_time_last_time_enqueue(0), m_time_last_time_pop(0),
     m_last_arrival_time(0), m_strict_fifo(p->ordered),
@@ -51,7 +51,6 @@ MessageBuffer::MessageBuffer(const Params *p)
     m_size_last_time_size_checked = 0;
     m_size_at_cycle_start = 0;
     m_msgs_this_cycle = 0;
-    m_not_avail_count = 0;
     m_priority_rank = 0;
 
     m_stall_msg_map.clear();
@@ -100,7 +99,7 @@ MessageBuffer::areNSlotsAvailable(unsigned int n, Tick current_time)
     }
 
     // now compare the new size with our max size
-    if (current_size + n <= m_max_size) {
+    if (current_size + m_stall_map_size + n <= m_max_size) {
         return true;
     } else {
         DPRINTF(RubyQueue, "n: %d, current_size: %d, heap size: %d, "
@@ -290,6 +289,8 @@ MessageBuffer::reanalyzeMessages(Addr addr, Tick current_time)
     // scheduled for the current cycle so that the previously stalled messages
     // will be observed before any younger messages that may arrive this cycle
     //
+    m_stall_map_size -= m_stall_msg_map[addr].size();
+    assert(m_stall_map_size >= 0);
     reanalyzeList(m_stall_msg_map[addr], current_time);
     m_stall_msg_map.erase(addr);
 }
@@ -307,6 +308,8 @@ MessageBuffer::reanalyzeAllMessages(Tick current_time)
     //
     for (StallMsgMapType::iterator map_iter = m_stall_msg_map.begin();
          map_iter != m_stall_msg_map.end(); ++map_iter) {
+        m_stall_map_size -= map_iter->second.size();
+        assert(m_stall_map_size >= 0);
         reanalyzeList(map_iter->second, current_time);
     }
     m_stall_msg_map.clear();
@@ -328,6 +331,7 @@ MessageBuffer::stallMessage(Addr addr, Tick current_time)
     // these addresses change state.
     //
     (m_stall_msg_map[addr]).push_back(message);
+    m_stall_map_size++;
 }
 
 void
@@ -348,6 +352,15 @@ MessageBuffer::isReady(Tick current_time) const
 {
     return ((m_prio_heap.size() > 0) &&
         (m_prio_heap.front()->getLastEnqueueTime() <= current_time));
+}
+
+void
+MessageBuffer::regStats()
+{
+    m_not_avail_count
+        .name(name() + ".not_avail_count")
+        .desc("Number of times this buffer did not have N slots available")
+        .flags(Stats::nozero);
 }
 
 uint32_t

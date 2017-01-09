@@ -62,8 +62,8 @@ SnoopFilter::eraseIfNullEntry(SnoopFilterCache::iterator& sf_it)
 std::pair<SnoopFilter::SnoopList, Cycles>
 SnoopFilter::lookupRequest(const Packet* cpkt, const SlavePort& slave_port)
 {
-    DPRINTF(SnoopFilter, "%s: packet src %s addr 0x%x cmd %s\n",
-            __func__, slave_port.name(), cpkt->getAddr(), cpkt->cmdString());
+    DPRINTF(SnoopFilter, "%s: src %s packet %s\n", __func__,
+            slave_port.name(), cpkt->print());
 
     // check if the packet came from a cache
     bool allocate = !cpkt->req->isUncacheable() && slave_port.isSnooping() &&
@@ -176,8 +176,7 @@ SnoopFilter::finishRequest(bool will_retry, Addr addr, bool is_secure)
 std::pair<SnoopFilter::SnoopList, Cycles>
 SnoopFilter::lookupSnoop(const Packet* cpkt)
 {
-    DPRINTF(SnoopFilter, "%s: packet addr 0x%x cmd %s\n",
-            __func__, cpkt->getAddr(), cpkt->cmdString());
+    DPRINTF(SnoopFilter, "%s: packet %s\n", __func__, cpkt->print());
 
     assert(cpkt->isRequest());
 
@@ -238,9 +237,8 @@ SnoopFilter::updateSnoopResponse(const Packet* cpkt,
                                  const SlavePort& rsp_port,
                                  const SlavePort& req_port)
 {
-    DPRINTF(SnoopFilter, "%s: packet rsp %s req %s addr 0x%x cmd %s\n",
-            __func__, rsp_port.name(), req_port.name(), cpkt->getAddr(),
-            cpkt->cmdString());
+    DPRINTF(SnoopFilter, "%s: rsp %s req %s packet %s\n",
+            __func__, rsp_port.name(), req_port.name(), cpkt->print());
 
     assert(cpkt->isResponse());
     assert(cpkt->cacheResponding());
@@ -294,9 +292,8 @@ void
 SnoopFilter::updateSnoopForward(const Packet* cpkt,
         const SlavePort& rsp_port, const MasterPort& req_port)
 {
-    DPRINTF(SnoopFilter, "%s: packet rsp %s req %s addr 0x%x cmd %s\n",
-            __func__, rsp_port.name(), req_port.name(), cpkt->getAddr(),
-            cpkt->cmdString());
+    DPRINTF(SnoopFilter, "%s: rsp %s req %s packet %s\n",
+            __func__, rsp_port.name(), req_port.name(), cpkt->print());
 
     assert(cpkt->isResponse());
     assert(cpkt->cacheResponding());
@@ -332,8 +329,8 @@ SnoopFilter::updateSnoopForward(const Packet* cpkt,
 void
 SnoopFilter::updateResponse(const Packet* cpkt, const SlavePort& slave_port)
 {
-    DPRINTF(SnoopFilter, "%s: packet src %s addr 0x%x cmd %s\n",
-            __func__, slave_port.name(), cpkt->getAddr(), cpkt->cmdString());
+    DPRINTF(SnoopFilter, "%s: src %s packet %s\n",
+            __func__, slave_port.name(), cpkt->print());
 
     assert(cpkt->isResponse());
 
@@ -361,11 +358,7 @@ SnoopFilter::updateResponse(const Packet* cpkt, const SlavePort& slave_port)
     panic_if(!(sf_item.requested & slave_mask), "SF value %x.%x missing "\
              "request bit\n", sf_item.requested, sf_item.holder);
 
-    // Update the residency of the cache line. If the response has no
-    // sharers we know that the line has been invalidated in all
-    // branches that are not where we are responding to.
-     if (!cpkt->hasSharers())
-        sf_item.holder = 0;
+    // Update the residency of the cache line.
     sf_item.holder |=  slave_mask;
     sf_item.requested &= ~slave_mask;
     assert(sf_item.holder | sf_item.requested);

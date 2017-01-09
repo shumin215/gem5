@@ -70,7 +70,6 @@
 
 #if THE_ISA == ALPHA_ISA
 #include "arch/alpha/linux/process.hh"
-#include "arch/alpha/tru64/process.hh"
 #elif THE_ISA == SPARC_ISA
 #include "arch/sparc/linux/process.hh"
 #include "arch/sparc/solaris/process.hh"
@@ -83,6 +82,8 @@
 #include "arch/x86/linux/process.hh"
 #elif THE_ISA == POWER_ISA
 #include "arch/power/linux/process.hh"
+#elif THE_ISA == RISCV_ISA
+#include "arch/riscv/linux/process.hh"
 #else
 #error "THE_ISA not set"
 #endif
@@ -335,6 +336,18 @@ Process::fixFileOffsets()
     // Search through the input options and set fd if match is found;
     // otherwise, open an input file and seek to location.
     FDEntry *fde_stdin = getFDEntry(STDIN_FILENO);
+
+    // Check if user has specified a different input file, and if so, use it
+    // instead of the file specified in the checkpoint. This also resets the
+    // file offset from the checkpointed value
+    string new_in = ((ProcessParams*)params())->input;
+    if (new_in != fde_stdin->filename) {
+        warn("Using new input file (%s) rather than checkpointed (%s)\n",
+             new_in, fde_stdin->filename);
+        fde_stdin->filename = new_in;
+        fde_stdin->fileOffset = 0;
+    }
+
     if ((it = imap.find(fde_stdin->filename)) != imap.end()) {
         fde_stdin->fd = it->second;
     } else {
@@ -345,6 +358,18 @@ Process::fixFileOffsets()
     // Search through the output/error options and set fd if match is found;
     // otherwise, open an output file and seek to location.
     FDEntry *fde_stdout = getFDEntry(STDOUT_FILENO);
+
+    // Check if user has specified a different output file, and if so, use it
+    // instead of the file specified in the checkpoint. This also resets the
+    // file offset from the checkpointed value
+    string new_out = ((ProcessParams*)params())->output;
+    if (new_out != fde_stdout->filename) {
+        warn("Using new output file (%s) rather than checkpointed (%s)\n",
+             new_out, fde_stdout->filename);
+        fde_stdout->filename = new_out;
+        fde_stdout->fileOffset = 0;
+    }
+
     if ((it = oemap.find(fde_stdout->filename)) != oemap.end()) {
         fde_stdout->fd = it->second;
     } else {
@@ -353,6 +378,18 @@ Process::fixFileOffsets()
     }
 
     FDEntry *fde_stderr = getFDEntry(STDERR_FILENO);
+
+    // Check if user has specified a different error file, and if so, use it
+    // instead of the file specified in the checkpoint. This also resets the
+    // file offset from the checkpointed value
+    string new_err = ((ProcessParams*)params())->errout;
+    if (new_err != fde_stderr->filename) {
+        warn("Using new error file (%s) rather than checkpointed (%s)\n",
+             new_err, fde_stderr->filename);
+        fde_stderr->filename = new_err;
+        fde_stderr->fileOffset = 0;
+    }
+
     if (fde_stdout->filename == fde_stderr->filename) {
         // Reuse the same file descriptor if these match.
         fde_stderr->fd = fde_stdout->fd;
@@ -591,10 +628,6 @@ LiveProcess::create(LiveProcessParams * params)
         fatal("Object file architecture does not match compiled ISA (Alpha).");
 
     switch (objFile->getOpSys()) {
-      case ObjectFile::Tru64:
-        process = new AlphaTru64Process(params, objFile);
-        break;
-
       case ObjectFile::UnknownOpSys:
         warn("Unknown operating system; assuming Linux.");
         // fall through
@@ -706,6 +739,19 @@ LiveProcess::create(LiveProcessParams * params)
         process = new PowerLinuxProcess(params, objFile);
         break;
 
+      default:
+        fatal("Unknown/unsupported operating system.");
+    }
+#elif THE_ISA == RISCV_ISA
+    if (objFile->getArch() != ObjectFile::Riscv)
+        fatal("Object file architecture does not match compiled ISA (RISCV).");
+    switch (objFile->getOpSys()) {
+      case ObjectFile::UnknownOpSys:
+        warn("Unknown operating system; assuming Linux.");
+        // fall through
+      case ObjectFile::Linux:
+        process = new RiscvLinuxProcess(params, objFile);
+        break;
       default:
         fatal("Unknown/unsupported operating system.");
     }

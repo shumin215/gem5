@@ -2,4 +2,4 @@ PROTOCOL = 'GPU_RfO'
 TARGET_ISA = 'x86'
 TARGET_GPU_ISA = 'hsail'
 BUILD_GPU = True
-CPU_MODELS = 'AtomicSimpleCPU,MyCPU,O3CPU,TimingSimpleCPU'
+CPU_MODELS = 'AtomicSimpleCPU,O3CPU,TimingSimpleCPU'

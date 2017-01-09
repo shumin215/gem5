@@ -265,6 +265,12 @@ class BaseCache : public MemObject
     const Cycles lookupLatency;
 
     /**
+     * The latency of data access of a cache. It occurs when there is
+     * an access to the cache.
+     */
+    const Cycles dataLatency;
+
+    /**
      * This is the forward latency of the cache. It occurs when there
      * is a cache miss and a request is forwarded downstream, in
      * particular an outbound miss.
@@ -512,8 +518,7 @@ class BaseCache : public MemObject
         WriteQueueEntry *wq_entry =
             writeBuffer.findMatch(blk_addr, pkt->isSecure());
         if (wq_entry && !wq_entry->inService) {
-            DPRINTF(Cache, "Potential to merge writeback %s to %#llx",
-                    pkt->cmdString(), pkt->getAddr());
+            DPRINTF(Cache, "Potential to merge writeback %s", pkt->print());
         }
 
         writeBuffer.allocate(blk_addr, blkSize, pkt, time, order++);

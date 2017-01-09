@@ -47,7 +47,6 @@
 #include "enums/StaticInstFlags.hh"
 
 // forward declarations
-
 class Packet;
 
 class ExecContext;

@@ -93,9 +93,6 @@ class BPredUnit : public SimObject
      */
     bool predict(const StaticInstPtr &inst, const InstSeqNum &seqNum,
                  TheISA::PCState &pc, ThreadID tid);
-    bool predictInOrder(const StaticInstPtr &inst, const InstSeqNum &seqNum,
-                        int asid, TheISA::PCState &instPC,
-                        TheISA::PCState &predPC, ThreadID tid);
 
     // @todo: Rename this function.
     virtual void uncondBranch(ThreadID tid, Addr pc, void * &bp_history) = 0;
@@ -182,14 +179,6 @@ class BPredUnit : public SimObject
      */
     virtual void update(ThreadID tid, Addr instPC, bool taken,
                         void *bp_history, bool squashed) = 0;
-     /**
-     * Deletes the associated history with a branch, performs no predictor
-     * updates.  Used for branches that mispredict and update tables but
-     * are still speculative and later retire.
-     * @param bp_history History to delete associated with this predictor
-     */
-    virtual void retireSquashed(ThreadID tid, void *bp_history) = 0;
-
     /**
      * Updates the BTB with the target of a branch.
      * @param inst_PC The branch's PC that will be updated.
@@ -214,7 +203,7 @@ class BPredUnit : public SimObject
                          ThreadID _tid)
             : seqNum(seq_num), pc(instPC), bpHistory(bp_history), RASTarget(0),
               RASIndex(0), tid(_tid), predTaken(pred_taken), usedRAS(0), pushedRAS(0),
-              wasCall(0), wasReturn(0), wasSquashed(0), wasIndirect(0)
+              wasCall(0), wasReturn(0), wasIndirect(0)
         {}
 
         bool operator==(const PredictorHistory &entry) const {
@@ -256,9 +245,6 @@ class BPredUnit : public SimObject
 
         /** Whether or not the instruction was a return. */
         bool wasReturn;
-
-        /** Whether this instruction has already mispredicted/updated bp */
-        bool wasSquashed;
 
         /** Wether this instruction was an indirect branch */
         bool wasIndirect;

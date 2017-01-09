@@ -126,13 +126,32 @@ class MSHR : public QueueEntry, public Printable
         const Counter order;  //!< Global order (for memory consistency mgmt)
         const PacketPtr pkt;  //!< Pending request packet.
         const Source source;  //!< Request from cpu, memory, or prefetcher?
-        const bool markedPending; //!< Did we mark upstream MSHR
-                                  //!< as downstreamPending?
+
+        /**
+         * We use this flag to track whether we have cleared the
+         * downstreamPending flag for the MSHR of the cache above
+         * where this packet originates from and guard noninitial
+         * attempts to clear it.
+         *
+         * The flag markedPending needs to be updated when the
+         * TargetList is in service which can be:
+         * 1) during the Target instantiation if the MSHR is in
+         * service and the target is not deferred,
+         * 2) when the MSHR becomes in service if the target is not
+         * deferred,
+         * 3) or when the TargetList is promoted (deferredTargets ->
+         * targets).
+         */
+        bool markedPending;
+
+        const bool allocOnFill;   //!< Should the response servicing this
+                                  //!< target list allocate in the cache?
 
         Target(PacketPtr _pkt, Tick _readyTime, Counter _order,
-               Source _source, bool _markedPending)
+               Source _source, bool _markedPending, bool alloc_on_fill)
             : recvTime(curTick()), readyTime(_readyTime), order(_order),
-              pkt(_pkt), source(_source), markedPending(_markedPending)
+              pkt(_pkt), source(_source), markedPending(_markedPending),
+              allocOnFill(alloc_on_fill)
         {}
     };
 
@@ -141,12 +160,55 @@ class MSHR : public QueueEntry, public Printable
       public:
         bool needsWritable;
         bool hasUpgrade;
+        /** Set when the response should allocate on fill */
+        bool allocOnFill;
 
         TargetList();
-        void resetFlags() { needsWritable = hasUpgrade = false; }
-        bool isReset() const { return !needsWritable && !hasUpgrade; }
+
+        /**
+         * Use the provided packet and the source to update the
+         * flags of this TargetList.
+         *
+         * @param pkt Packet considered for the flag update
+         * @param source Indicates the source of the packet
+         * @param alloc_on_fill Whether the pkt would allocate on a fill
+         */
+        void updateFlags(PacketPtr pkt, Target::Source source,
+                         bool alloc_on_fill);
+
+        void resetFlags() { needsWritable = hasUpgrade = allocOnFill = false; }
+
+        /**
+         * Goes through the list of targets and uses them to populate
+         * the flags of this TargetList. When the function returns the
+         * flags are consistent with the properties of packets in the
+         * list.
+         */
+        void populateFlags();
+
+        /**
+         * Tests if the flags of this TargetList have their default
+         * values.
+         */
+        bool isReset() const {
+            return !needsWritable && !hasUpgrade && !allocOnFill;
+        }
+
+        /**
+         * Add the specified packet in the TargetList. This function
+         * stores information related to the added packet and updates
+         * accordingly the flags.
+         *
+         * @param pkt Packet considered for adding
+         * @param readTime Tick at which the packet is processed by this cache
+         * @param order A counter giving a unique id to each target
+         * @param source Indicates the source agent of the packet
+         * @param markPending Set for deferred targets or pending MSHRs
+         * @param alloc_on_fill Whether it should allocate on a fill
+         */
         void add(PacketPtr pkt, Tick readyTime, Counter order,
-                 Target::Source source, bool markPending);
+                 Target::Source source, bool markPending,
+                 bool alloc_on_fill);
 
         /**
          * Convert upgrades to the equivalent request if the cache line they
@@ -164,9 +226,6 @@ class MSHR : public QueueEntry, public Printable
     typedef std::list<MSHR *> List;
     /** MSHR list iterator. */
     typedef List::iterator Iterator;
-
-    /** Keep track of whether we should allocate on fill or not */
-    bool allocOnFill;
 
     /** The pending* and post* flags are only valid if inService is
      *  true.  Using the accessor functions lets us detect if these
@@ -190,6 +249,9 @@ class MSHR : public QueueEntry, public Printable
 
     bool sendPacket(Cache &cache);
 
+    bool allocOnFill() const {
+        return targets.allocOnFill;
+    }
   private:
 
     /**
@@ -249,6 +311,20 @@ class MSHR : public QueueEntry, public Printable
      */
     int getNumTargets() const
     { return targets.size() + deferredTargets.size(); }
+
+    /**
+     * Extracts the subset of the targets that can be serviced given a
+     * received response. This function returns the targets list
+     * unless the response is a ReadRespWithInvalidate. The
+     * ReadRespWithInvalidate is only invalidating response that its
+     * invalidation was not expected when the request (a
+     * ReadSharedReq) was sent out. For ReadRespWithInvalidate we can
+     * safely service only the first FromCPU target and all FromSnoop
+     * targets (inform all snoopers that we no longer have the block).
+     *
+     * @param pkt The response from the downstream memory
+     */
+    TargetList extractServiceableTargets(PacketPtr pkt);
 
     /**
      * Returns true if there are targets left.
