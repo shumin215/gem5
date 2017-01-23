@@ -174,6 +174,19 @@ DefaultRename<Impl>::regStats()
         .desc("count of insts added to the skid buffer")
         .flags(Stats::total)
         ;
+	/****************** Additional Stats **********************/
+
+	numOfExecutableInsts
+        .name(name() + ".ExecutableInsts")
+        .desc("count of executable instructions in rename stage immediately")
+        .flags(Stats::total)
+        ;
+	numOfAllRenamedInsts
+        .name(name() + ".AllRenamedInsts")
+        .desc("count of all renamed instructions in rename stage")
+        .flags(Stats::total)
+        ;
+
     intRenameLookups
         .name(name() + ".int_rename_lookups")
         .desc("Number of integer rename lookups")
@@ -471,6 +484,7 @@ DefaultRename<Impl>::rename(bool &status_change, ThreadID tid)
             toDecode->renameUnblock[tid] = false;
         }
     } else if (renameStatus[tid] == Unblocking) {
+
         if (resumeUnblocking) {
             block(tid);
             resumeUnblocking = false;
@@ -485,6 +499,9 @@ DefaultRename<Impl>::rename(bool &status_change, ThreadID tid)
 
         renameInsts(tid);
     } else if (renameStatus[tid] == Unblocking) {
+
+		DPRINTF(Rename, "[tid:%u]: Unblocking\n", tid); // added by shumin
+
         renameInsts(tid);
 
         if (validInsts()) {
@@ -707,6 +724,17 @@ DefaultRename<Impl>::renameInsts(ThreadID tid)
                 storesInProgress[tid]++;
         }
         ++renamed_insts;
+
+		/********************************************************
+		 * This line indicates that renaming work is almost done
+		 ******************************************************/
+		numOfAllRenamedInsts++;
+
+		if (inst->readyToIssue() && !(inst->isMemRef()))
+		{
+			numOfExecutableInsts++;
+		}
+
         // Notify potential listeners that source and destination registers for
         // this instruction have been renamed.
         ppRename->notify(inst);
