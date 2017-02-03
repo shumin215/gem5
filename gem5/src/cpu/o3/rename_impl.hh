@@ -549,6 +549,7 @@ DefaultRename<Impl>::renameInsts(ThreadID tid)
 
     FullSource source = ROB;
 
+	/* Find the critical entries between ROB and IQ */
     if (free_iq_entries < min_free_entries) {
         min_free_entries = free_iq_entries;
         source = IQ;
@@ -621,7 +622,7 @@ DefaultRename<Impl>::renameInsts(ThreadID tid)
             if (calcFreeLQEntries(tid) <= 0) {
                 DPRINTF(Rename, "[tid:%u]: Cannot rename due to no free LQ\n");
                 source = LQ;
-                incrFullStat(source);
+                incrFullStat(source); 	// just to take into account the stats for full
                 break;
             }
         }
