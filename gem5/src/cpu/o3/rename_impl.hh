@@ -46,6 +46,7 @@
 #define __CPU_O3_RENAME_IMPL_HH__
 
 #include <list>
+#include <string.h>
 
 #include "arch/isa_traits.hh"
 #include "arch/registers.hh"
@@ -56,6 +57,8 @@
 #include "debug/Rename.hh"
 #include "debug/O3PipeView.hh"
 #include "params/DerivO3CPU.hh"
+
+#include "cpu/o3/fu_pool.hh"
 
 using namespace std;
 
@@ -69,8 +72,11 @@ DefaultRename<Impl>::DefaultRename(O3CPU *_cpu, DerivO3CPUParams *params)
       commitWidth(params->commitWidth),
       numThreads(params->numThreads),
       maxPhysicalRegs(params->numPhysIntRegs + params->numPhysFloatRegs
-                      + params->numPhysCCRegs)
+                      + params->numPhysCCRegs),
+		fuPoolInRenameStage(params->fuPool)
 {
+	assert(fuPoolInRenameStage);
+
     if (renameWidth > Impl::MaxWidth)
         fatal("renameWidth (%d) is larger than compiled limit (%d),\n"
              "\tincrease MaxWidth in src/cpu/o3/impl.hh\n",
@@ -186,6 +192,31 @@ DefaultRename<Impl>::regStats()
         .desc("count of all renamed instructions in rename stage")
         .flags(Stats::total)
         ;
+
+	numOfInstsInSecondStage
+        .name(name() + ".SecondStageExecInsts")
+        .desc("count of executable instructions in second stage of pre-execution structure")
+        .flags(Stats::total)
+        ;
+	numOfInstsInThirdStage
+        .name(name() + ".ThirdStageExecInsts")
+        .desc("count of executable instructions in third stage of pre-execution structure")
+        .flags(Stats::total)
+        ;
+
+	numOfNotForwardedInsts
+        .name(name() + ".NotForwardedInsts")
+        .desc("count of not pre-execution instructions in rename stage")
+        .flags(Stats::total)
+        ;
+
+	numberOfDeletedInstsInLCCEList
+        .name(name() + ".DeletedInstsInLCCEList")
+        .desc("count of deleted instructions in LCCE List")
+        .flags(Stats::total)
+        ;
+
+	/************************************************************/
 
     intRenameLookups
         .name(name() + ".int_rename_lookups")
@@ -607,6 +638,9 @@ DefaultRename<Impl>::renameInsts(ThreadID tid)
 
     int renamed_insts = 0;
 
+	/* Update LCCE List by decrementing Left Cycle in each instruction */
+	decrementLeftCycles();
+
     while (insts_available > 0 &&  toIEWIndex < renameWidth) {
         DPRINTF(Rename, "[tid:%u]: Sending instructions to IEW.\n", tid);
 
@@ -673,6 +707,8 @@ DefaultRename<Impl>::renameInsts(ThreadID tid)
             break;
         }
 
+
+
         // Handle serializeAfter/serializeBefore instructions.
         // serializeAfter marks the next instruction as serializeBefore.
         // serializeBefore makes the instruction wait in rename until the ROB
@@ -726,15 +762,39 @@ DefaultRename<Impl>::renameInsts(ThreadID tid)
         }
         ++renamed_insts;
 
-		/********************************************************
-		 * This line indicates that renaming work is almost done
-		 ******************************************************/
-		numOfAllRenamedInsts++;
+		/***********************************************************
+		 *
+		 * To check a number of executable instruction in deep stages
+		 * of pre-execution
+		 *
+		 * **********************************************************/
 
-		if (inst->readyToIssue() && !(inst->isMemRef()))
-		{
-			numOfExecutableInsts++;
-		}
+		/* Allocate new entry for new instruction */
+		LCCE *instLCCE = new LCCE; 
+		initializeLCCE(instLCCE);
+
+		/* push LCCE to LCCE List */
+		LCCEList.push_back(instLCCE);
+
+		/* Set Destination Register of each instruction */
+		setDestRegInLCCE(inst, instLCCE);
+		instLCCE->destReg = (int)inst->getDestRegister(0);
+
+		/* Get operation latencies of instruction */
+//		instLCCE->leftCycle = getLatency(inst);
+
+		/* Check instruction ready to issue, namely set issueableFlag */
+//		if(inst->readyToIssue() && !(inst->isMemRef()))
+//		{
+//			numOfExecutableInsts++;
+//
+//			if(!isThereDependency(inst))
+//			{
+//				instLCCE->issuableFlag = true;
+//			}
+//		}
+
+		numOfAllRenamedInsts++;
 
         // Notify potential listeners that source and destination registers for
         // this instruction have been renamed.
@@ -750,6 +810,9 @@ DefaultRename<Impl>::renameInsts(ThreadID tid)
         // Decrement how many instructions are available.
         --insts_available;
     }
+
+	/* Delete already issued instruction entry in LCCE */
+	deleteIssuedLCCE();
 
     instsInProgress[tid] += renamed_insts;
     renameRenamedInsts += renamed_insts;
@@ -1077,7 +1140,8 @@ DefaultRename<Impl>::renameSrcRegs(DynInstPtr &inst, ThreadID tid)
                 "got phys reg %i\n", tid, RegClassStrings[regIdxToClass(src_reg)],
                 (int)src_reg, (int)flat_rel_src_reg, (int)renamed_reg);
 
-        inst->renameSrcReg(src_idx, renamed_reg);
+		// rename each source register in an instruction
+        inst->renameSrcReg(src_idx, renamed_reg); 
 
         // See if the register is ready or not.
         if (scoreboard->getReg(renamed_reg)) {
@@ -1467,6 +1531,159 @@ DefaultRename<Impl>::dumpHistory()
             buf_it++;
         }
     }
+}
+
+/* Initialize the Left Cycle Count Entry (LCCE) structure */
+template <typename Impl>
+void DefaultRename<Impl>::initializeLCCE(LCCE *_lcce)
+{
+	_lcce->destReg = 0;
+	_lcce->leftCycle = 0;
+	_lcce->issuableFlag = false;
+}
+
+/* Get operation latencies of instruction */
+template <typename Impl>
+int DefaultRename<Impl>::getLatency(DynInstPtr &inst)
+{
+	Cycles op_latency = Cycles(1);
+	OpClass op_class = inst->opClass();
+	int idx = FUPool::NoCapableFU;
+
+	if(op_class != No_OpClass)
+	{
+		idx = fuPoolInRenameStage->getUnit(op_class);
+		if(idx > FUPool::NoFreeFU)
+		{
+			op_latency = fuPoolInRenameStage->getOpLatency(op_class);
+		}
+	}
+
+	return (int)op_latency;
+}
+
+/* Check if there is dependency with the result of preceding instructions */
+template <typename Impl>
+bool DefaultRename<Impl>::isThereDependency(DynInstPtr &inst)
+{
+	/* if there are no entries in LCCE List */
+	if(LCCEList.empty())
+		return false;
+
+	unsigned num_of_src_regs = inst->numSrcRegs();
+	int list_size = LCCEList.size();
+	int num_of_dependent_inst = 0;
+	int latency = getLatency(inst);
+
+	for(int src_idx = 0; src_idx < num_of_src_regs; src_idx++)
+	{
+		for(int idx = 0; idx < list_size; idx++)
+		{
+			int dest_reg = LCCEList[idx]->destReg;
+			int src_reg = (int)inst->getSrcReg(src_idx);
+
+			/* For debug */
+			DPRINTF(Rename, " ******** Renamed Src Reg : %d [%lli] with "
+					"PC %s.***********\n", 
+					src_reg,
+					inst->seqNum, 
+					inst->pcState());
+		
+			if(src_reg == dest_reg)
+			{
+				num_of_dependent_inst++;
+				
+				/********************************************************* 
+				 * If instruction's latency is less than left cycle of 
+				 * corresponding instruction, this instruction can be 
+				 * executed  
+				 *
+				 * Difference: 1 -> Execution in Second Stage
+				 * Defference: 2 -> Execution in Third Stage
+				 * ********************************************************/
+
+				int difference = latency - (LCCEList[idx]->leftCycle);
+				if(difference == 1)
+				{
+					numOfInstsInSecondStage++;
+				}
+				else if(difference == 2)
+				{
+					numOfInstsInThirdStage++;
+				}
+				else
+				{
+					numOfNotForwardedInsts++;
+				}
+			}
+		}
+	}
+
+	if(num_of_dependent_inst > 0)
+		return true;
+	else
+		return false;
+}
+
+/* Update Left Cycles Entry each cycle in LCCE list */
+template <typename Impl>
+void DefaultRename<Impl>::decrementLeftCycles(void)
+{
+	int list_size = LCCEList.size();
+
+	if(list_size == 0)
+		return;
+
+	for(int idx = 0; idx<list_size; idx++)
+	{
+		if(LCCEList[idx]->issuableFlag == true)
+			LCCEList[idx]->leftCycle--;
+	}
+}
+
+/* Update the issued LCCE, namely left cycle : 0 entry is deleted */
+template <typename Impl>
+void DefaultRename<Impl>::deleteIssuedLCCE(void)	
+{
+	int list_size = LCCEList.size();
+
+	if(LCCEList.empty())
+		return;
+
+//	auto iter = LCCEList.begin();
+//	auto iter_end = LCCEList.end();
+//	for(; iter != NULL; iter++)
+//	{
+//		if((*iter)->leftCycle == 0)
+//		{
+//			delete (*iter);
+//			LCCEList.erase(iter);
+//			numberOfDeletedInstsInLCCEList++;
+//		}
+//	}
+
+	for(int idx = 0; idx < list_size; idx++)
+	{
+		LCCE *lcce = LCCEList[idx];
+		if(LCCEList[idx]->leftCycle == 0)
+		{
+			delete (lcce);
+//			delete (LCCEList[idx]);
+			LCCEList.erase(LCCEList.begin() + idx);
+			numberOfDeletedInstsInLCCEList++;
+		}
+	}
+}
+
+/* Set Destination Reg in each LCCE */
+template <typename Impl>
+void DefaultRename<Impl>::setDestRegInLCCE(DynInstPtr &inst, LCCE *instLCCE)
+{
+//	if(LCCEList.empty())
+//		return;
+
+//	unsigned num_of_dest_reg = inst->numDestRegs();
+
 }
 
 #endif//__CPU_O3_RENAME_IMPL_HH__

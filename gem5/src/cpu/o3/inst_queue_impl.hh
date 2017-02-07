@@ -805,6 +805,11 @@ InstructionQueue<Impl>::scheduleReadyInsts()
         Cycles op_latency = Cycles(1);
         ThreadID tid = issuing_inst->threadNumber;
 
+		/********************************************
+		 * Get operation latencies of instructions 
+		 *
+		 * op_latency: latency value of each instruction
+		 *********************************************/
         if (op_class != No_OpClass) {
             idx = fuPool->getUnit(op_class);
             issuing_inst->isFloating() ? fpAluAccesses++ : intAluAccesses++;
