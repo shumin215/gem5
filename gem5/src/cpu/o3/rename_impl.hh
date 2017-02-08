@@ -782,50 +782,58 @@ DefaultRename<Impl>::renameInsts(ThreadID tid)
 			int latency = 1;
 //			int latency = getLatency(inst);
 
+			/* If there is no destination operand */
+//			if(num_of_dest_regs == 0)
+//				numOfExecutableInsts++;
+
 			for(int idx = 0; idx < num_of_dest_regs; idx++)
 			{
 				int dest_reg = (int)inst->getDestRegister(idx);
-				LCCE *newLCCE;
+				LCCE *newLCCE = NULL;
 
-				/* there is already dest register entry */
-				if(doesDestRegExist(dest_reg))
+				/* Allocate LCCE memory and push new LCCE to LCCE List */
+				allocateLCCE(dest_reg, newLCCE, inst);
+
+			/* 1. All source operands are available from register files */
+				if(inst->readyToIssue())
 				{
-					newLCCE = getPointerOfLCCEByDestReg(dest_reg);
-
-					if(newLCCE->executedFlag == false)
-					{
-						newLCCE->leftCycle = latency;
-					}
+					newLCCE->executionType = IXU;
+					newLCCE->leftCycle = latency;
+					newLCCE->availableFlag = false;
 				}
-				/* there is no dest register entry, so need allocation */
 				else
 				{
-					newLCCE = new LCCE;
-					initializeLCCE(newLCCE);
+					int *srcArray = new int[10];
+					getNotReadySrcReg(inst, srcArray);
 
-					newLCCE->leftCycle = latency;
-					newLCCE->destReg = dest_reg;
-					LCCEList.push_back(newLCCE);
+			/* 2. Not ready source registers are on being executed in IXU */
+					if(isInstReadyToBeForwarded(inst, srcArray))
+					{
+						newLCCE->executionType = IXU;
+						newLCCE->availableFlag = false;
+					}
+			/* 3. By IXU execution, instruction is ready to issue, 
+			 *    but not detected in simulation. Because we didn't 
+			 *    implement the IXU. */
+//					else if(wasInstExecutedInIXU(inst, srcArray))
+//					{
+//						newLCCE->executionType = IXU;
+//						newLCCE->availableFlag = false;
+//
+//						numOfExecutableInsts++;
+//					}
+			/* The others that instructions can't be executed in IXU */
+					else
+					{
+						newLCCE->leftCycle = latency;
+						newLCCE->executionType = OXU;
+						newLCCE->availableFlag = false;
+					}
 
-					numOfLCCEEntries++;
+					delete[] srcArray;
 				}
-
-				updateExecutedFlag(inst, newLCCE);
 			}
 		}
-		/* Allocate new entry for new instruction */
-//		LCCE *instLCCE = new LCCE; 
-//		initializeLCCE(instLCCE);
-//
-//		/* push LCCE to LCCE List */
-//		LCCEList.push_back(instLCCE);
-//
-//		/* Set Destination Register of each instruction */
-//		setDestRegInLCCE(inst, instLCCE);
-//		instLCCE->destReg = (int)inst->getDestRegister(0);
-
-		/* Get operation latencies of instruction */
-//		instLCCE->leftCycle = getLatency(inst);
 
 		/* Check instruction ready to issue, namely set issueableFlag */
 		if(inst->readyToIssue() && !(inst->isMemRef()))
@@ -849,9 +857,6 @@ DefaultRename<Impl>::renameInsts(ThreadID tid)
         // Decrement how many instructions are available.
         --insts_available;
     }
-
-	/* Delete already issued instruction entry in LCCE */
-//	deleteIssuedLCCE();
 
     instsInProgress[tid] += renamed_insts;
     renameRenamedInsts += renamed_insts;
@@ -1576,9 +1581,10 @@ DefaultRename<Impl>::dumpHistory()
 template <typename Impl>
 void DefaultRename<Impl>::initializeLCCE(LCCE *_lcce)
 {
-	_lcce->destReg = 0;
-	_lcce->leftCycle = 0;
-	_lcce->executedFlag = false;
+	_lcce->destReg = -1;
+	_lcce->leftCycle = -1;
+	_lcce->availableFlag = false;
+	_lcce->executionType = IXU;
 }
 
 /* Get operation latencies of instruction */
@@ -1684,10 +1690,12 @@ void DefaultRename<Impl>::decrementLeftCycles(void)
 
 	for(int idx = 0; idx<list_size; idx++)
 	{
-		if(LCCEList[idx]->executedFlag == true)
-		{
+		if(LCCEList[idx]->leftCycle > 0)
 			LCCEList[idx]->leftCycle--;
-			LCCEList[idx]->executedFlag = false;
+
+		if(LCCEList[idx]->leftCycle == 0)
+		{
+			LCCEList[idx]->availableFlag = true;
 		}
 	}
 }
@@ -1723,17 +1731,6 @@ void DefaultRename<Impl>::deleteIssuedLCCE(void)
 			numberOfDeletedInstsInLCCEList++;
 		}
 	}
-}
-
-/* Set Destination Reg in each LCCE */
-template <typename Impl>
-void DefaultRename<Impl>::setDestRegInLCCE(DynInstPtr &inst, LCCE *instLCCE)
-{
-//	if(LCCEList.empty())
-//		return;
-
-//	unsigned num_of_dest_reg = inst->numDestRegs();
-
 }
 
 /* Check if there is destination register entry in LCCE List */
@@ -1780,7 +1777,7 @@ typename DefaultRename<Impl>::LCCE* DefaultRename<Impl>::getPointerOfLCCEByDestR
 
 /* Update executed flag */
 template <typename Impl>
-void DefaultRename<Impl>::updateExecutedFlag(DynInstPtr &_inst, LCCE *lcce)
+void DefaultRename<Impl>::updateAvailableFlag(DynInstPtr &_inst, LCCE *lcce)
 {
 	if(LCCEList.empty())
 		return;
@@ -1788,9 +1785,223 @@ void DefaultRename<Impl>::updateExecutedFlag(DynInstPtr &_inst, LCCE *lcce)
 	if(_inst->readyToIssue() && !isThereDependency(_inst))
 	{
 //		numOfExecutableInsts++;
-		lcce->executedFlag = true;
+		lcce->availableFlag = true;
 	}
 
 }
 
+/* ******************************************************************
+ *
+ * Allocate LCCE if there isn't corresponding LCCE in List 
+ * If not, existing entry is used
+ *
+ * In order to search existing entry, need destination register index
+ *
+ * *******************************************************************/
+template <typename Impl>
+void DefaultRename<Impl>::allocateLCCE(int dest_reg, LCCE* &_lcce, DynInstPtr &_inst)
+{
+	if(doesDestRegExist(dest_reg))
+	{
+		_lcce = getPointerOfLCCEByDestReg(dest_reg);
+
+		initializeLCCE(_lcce);
+	}
+	/* there is no dest register entry, so need allocation */
+	else
+	{
+		_lcce = new LCCE;
+		initializeLCCE(_lcce);
+		_lcce->destReg = dest_reg;
+
+		LCCEList.push_back(_lcce);
+
+		numOfLCCEEntries++;
+	}
+}
+
+/* Get not ready source registers */
+template <typename Impl>
+int DefaultRename<Impl>::getNotReadySrcReg(DynInstPtr &inst, int *notReadySrcArray)
+{
+	int num_of_src_regs = (int)inst->numSrcRegs();
+	int arrayIdx = 0;
+
+	if(num_of_src_regs == 0)
+		return 0;
+
+	for(int idx = 0; idx<num_of_src_regs; idx++)
+	{
+		if(!inst->isReadySrcRegIdx(idx))
+		{
+			*(notReadySrcArray+arrayIdx) = (int)inst->getSrcReg(idx);
+			arrayIdx++;
+		}
+	}
+
+	return (arrayIdx+1);
+}
+
+/* Check that instruction is being executed in IXU */
+template <typename Impl>
+bool DefaultRename<Impl>::isInstReadyToBeForwarded(DynInstPtr &inst, int *srcArray)
+{
+	if(LCCEList.empty())
+	{
+		return false;
+	}
+
+	int list_size = LCCEList.size();
+	int array_size = sizeof(srcArray) / sizeof(int);
+	int latency = 1;
+	int highestCycle = -999;
+	LCCE *lcce = NULL;
+	LCCE *currentLCCE = LCCEList.back();
+	bool isComplete[10];
+
+	/* Initialize bool array to true */
+	for(int i=0; i<10; i++)
+		isComplete[i] = false;
+
+	for(int idx = 0; idx < array_size; idx++)
+	{
+		int src_reg = *(srcArray+idx);
+
+		for(int list_idx = 0; list_idx < list_size; list_idx++)
+		{
+			lcce = LCCEList[list_idx];
+			int dest_reg = lcce->destReg;
+
+			/* If src reg equals dest reg, namely matching occurs */
+			if(src_reg == dest_reg)
+			{
+				if(lcce->executionType == IXU)
+				{
+					if(lcce->availableFlag == true)
+					{
+						isComplete[idx] = true;
+						break;
+					}
+					else
+					{
+						isComplete[idx] = false;
+					}
+
+					/* Dest register can be forwarded to src register */
+					if(highestCycle < lcce->leftCycle)
+					{
+						highestCycle = lcce->leftCycle;
+					}
+					else
+					{
+						return false;
+					}
+
+				/* Since we found the physical register matching,
+				 * we search the other not ready source register */
+					break;
+				}
+				/* Instruction is executed in OXU */
+				else
+				{
+					return false;
+				}
+			}
+		}
+	}
+
+/*****************************************************************
+ * Check if all source register can be accessed by results of 
+ * IXU. So instruction can be executed immediately  
+ * *************************************************************/
+	for(int i=0; i<array_size; i++)
+	{
+		isComplete[0] &= isComplete[i];
+	}
+
+	if(isComplete[0] == true)
+	{
+		currentLCCE->leftCycle = latency;
+		numOfExecutableInsts++;
+		return true;
+	}
+
+/********************************************************* 
+* If instruction's latency is less than left cycle of 
+* corresponding instruction, this instruction can be 
+* executed  
+*
+* Difference: 1 -> Execution in Second Stage
+* Defference: 2 -> Execution in Third Stage
+* ********************************************************/
+
+	if(currentLCCE != NULL)
+	{
+		if(highestCycle == 1)
+		{
+			currentLCCE->leftCycle = 1+latency;
+			numOfInstsInSecondStage++;
+			return true;
+		}
+		else if(highestCycle == 2)
+		{
+			currentLCCE->leftCycle = 2+latency;
+			numOfInstsInThirdStage++;
+			return true;
+		}
+		else
+		{
+			currentLCCE->leftCycle = latency;
+		}
+	}
+
+	return false;
+}
+
+/**********************************************
+ * If instruction was already executed in IXU 
+ * immediately instruction can be executed 
+ * ********************************************/
+template <typename Impl>
+bool DefaultRename<Impl>::wasInstExecutedInIXU(DynInstPtr &inst, int *srcArray)
+{
+	if(LCCEList.empty())
+	{
+		return false;
+	}
+
+	int list_size = LCCEList.size();
+	int array_size = sizeof(srcArray) / sizeof(int);
+//	int latency = 1;
+	bool isComplete = false;
+//	int numOfDependentInsts = 0;
+	LCCE *lcce = NULL;
+//	LCCE *currentLCCE = LCCEList.back();
+
+	for(int idx = 0; idx < array_size; idx++)
+	{
+		int src_reg = *(srcArray+idx);
+
+		for(int list_idx = 0; list_idx < list_size; list_idx++)
+		{
+			lcce = LCCEList[list_idx];
+			int dest_reg = lcce->destReg;
+
+			/* If src reg equals dest reg, namely matching occurs */
+			if(src_reg == dest_reg)
+			{
+				if(lcce->executionType == IXU &&
+						lcce->availableFlag == true)
+				{
+					isComplete = true;
+					break;
+				}
+				
+				return false;
+			}
+		}
+	}
+
+	return isComplete;
+}
 #endif//__CPU_O3_RENAME_IMPL_HH__

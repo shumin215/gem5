@@ -120,6 +120,12 @@ class DefaultRename
         SerializeStall
     };
 
+	enum ExecutionType
+	{
+		IXU,
+		OXU
+	};
+
 	/************************************************************* 
 	 * Left Cycle Count Entry (LCCE) for checking benefit of 
 	 * multiple stages of pre-execution structure 
@@ -127,8 +133,9 @@ class DefaultRename
 	struct LCCE
 	{
 		int destReg; 		// destination register of an instruction
-		int leftCycle; 	// left cycle of instruction operations
-		bool executedFlag; 		// if all source registers are ready to issue 
+		int leftCycle; 		// left cycle of instruction operations
+		bool availableFlag; 	// if all physical registers are ready to be issued 
+		ExecutionType executionType;
 	};
 
 	std::vector<LCCE*> LCCEList;
@@ -324,9 +331,6 @@ class DefaultRename
 	/* Update the issued LCCE, namely left cycle : 0 entry is deleted */
 	void deleteIssuedLCCE(void);	
 
-	/* Set Destination Reg in each LCCE */
-	void setDestRegInLCCE(DynInstPtr &inst, LCCE *instLCCE);
-
 	/* Check if there is destination register entry in LCCE List */
 	bool doesDestRegExist(int dest_reg);
 
@@ -334,7 +338,22 @@ class DefaultRename
 	LCCE* getPointerOfLCCEByDestReg(int _destReg);
 
 	/* Update Executed Flag */
-	void updateExecutedFlag(DynInstPtr &_inst, LCCE *lcce);
+	void updateAvailableFlag(DynInstPtr &_inst, LCCE *lcce);
+
+	/* Allocate LCCE Entry in LCCE List */
+	void allocateLCCE(int dest_reg, LCCE * &_lcce, DynInstPtr &_inst);
+
+	/* Get not ready source registers */
+	int getNotReadySrcReg(DynInstPtr &inst, int *notReadySrcArray);
+
+	/* Check that instruction is being executed in IXU */
+	bool isInstReadyToBeForwarded(DynInstPtr &inst, int *srcArray);
+
+	/**********************************************
+	 * If instruction was already executed in IXU 
+	 * immediately instruction can be executed 
+	 * ********************************************/
+	bool wasInstExecutedInIXU(DynInstPtr &inst, int *srcArray);
 
   private:
 
