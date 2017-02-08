@@ -128,7 +128,7 @@ class DefaultRename
 	{
 		int destReg; 		// destination register of an instruction
 		int leftCycle; 	// left cycle of instruction operations
-		bool issuableFlag; 		// if all source registers are ready to issue 
+		bool executedFlag; 		// if all source registers are ready to issue 
 	};
 
 	std::vector<LCCE*> LCCEList;
@@ -326,6 +326,17 @@ class DefaultRename
 
 	/* Set Destination Reg in each LCCE */
 	void setDestRegInLCCE(DynInstPtr &inst, LCCE *instLCCE);
+
+	/* Check if there is destination register entry in LCCE List */
+	bool doesDestRegExist(int dest_reg);
+
+	/* Get pointer of LCCE List */
+	LCCE* getPointerOfLCCEByDestReg(int _destReg);
+
+	/* Update Executed Flag */
+	void updateExecutedFlag(DynInstPtr &_inst, LCCE *lcce);
+
+  private:
 
     /** Either serializes on the next instruction available in the InstQueue,
      * or records that it must serialize on the next instruction to enter
@@ -590,6 +601,9 @@ class DefaultRename
 
 	/* Number of deleted instruction that is complete to be issued in LCCE List */
 	Stats::Scalar numberOfDeletedInstsInLCCEList;
+
+	/* Number of LCCE entries */
+	Stats::Scalar numOfLCCEEntries;
 
 };
 

@@ -216,6 +216,12 @@ DefaultRename<Impl>::regStats()
         .flags(Stats::total)
         ;
 
+	numOfLCCEEntries
+        .name(name() + ".NumberOfAddedLCCEEntries")
+        .desc("count of added entries in LCCE List")
+        .flags(Stats::total)
+        ;
+
 	/************************************************************/
 
     intRenameLookups
@@ -769,30 +775,63 @@ DefaultRename<Impl>::renameInsts(ThreadID tid)
 		 *
 		 * **********************************************************/
 
+		/* We handle only non memory instruction */
+		if(!inst->isMemRef())
+		{
+			int num_of_dest_regs = (int)inst->numDestRegs();
+			int latency = 1;
+//			int latency = getLatency(inst);
+
+			for(int idx = 0; idx < num_of_dest_regs; idx++)
+			{
+				int dest_reg = (int)inst->getDestRegister(idx);
+				LCCE *newLCCE;
+
+				/* there is already dest register entry */
+				if(doesDestRegExist(dest_reg))
+				{
+					newLCCE = getPointerOfLCCEByDestReg(dest_reg);
+
+					if(newLCCE->executedFlag == false)
+					{
+						newLCCE->leftCycle = latency;
+					}
+				}
+				/* there is no dest register entry, so need allocation */
+				else
+				{
+					newLCCE = new LCCE;
+					initializeLCCE(newLCCE);
+
+					newLCCE->leftCycle = latency;
+					newLCCE->destReg = dest_reg;
+					LCCEList.push_back(newLCCE);
+
+					numOfLCCEEntries++;
+				}
+
+				updateExecutedFlag(inst, newLCCE);
+			}
+		}
 		/* Allocate new entry for new instruction */
-		LCCE *instLCCE = new LCCE; 
-		initializeLCCE(instLCCE);
-
-		/* push LCCE to LCCE List */
-		LCCEList.push_back(instLCCE);
-
-		/* Set Destination Register of each instruction */
-		setDestRegInLCCE(inst, instLCCE);
-		instLCCE->destReg = (int)inst->getDestRegister(0);
+//		LCCE *instLCCE = new LCCE; 
+//		initializeLCCE(instLCCE);
+//
+//		/* push LCCE to LCCE List */
+//		LCCEList.push_back(instLCCE);
+//
+//		/* Set Destination Register of each instruction */
+//		setDestRegInLCCE(inst, instLCCE);
+//		instLCCE->destReg = (int)inst->getDestRegister(0);
 
 		/* Get operation latencies of instruction */
 //		instLCCE->leftCycle = getLatency(inst);
 
 		/* Check instruction ready to issue, namely set issueableFlag */
-//		if(inst->readyToIssue() && !(inst->isMemRef()))
-//		{
-//			numOfExecutableInsts++;
-//
-//			if(!isThereDependency(inst))
-//			{
-//				instLCCE->issuableFlag = true;
-//			}
-//		}
+		if(inst->readyToIssue() && !(inst->isMemRef()))
+		{
+			numOfExecutableInsts++;
+		}
 
 		numOfAllRenamedInsts++;
 
@@ -812,7 +851,7 @@ DefaultRename<Impl>::renameInsts(ThreadID tid)
     }
 
 	/* Delete already issued instruction entry in LCCE */
-	deleteIssuedLCCE();
+//	deleteIssuedLCCE();
 
     instsInProgress[tid] += renamed_insts;
     renameRenamedInsts += renamed_insts;
@@ -1539,7 +1578,7 @@ void DefaultRename<Impl>::initializeLCCE(LCCE *_lcce)
 {
 	_lcce->destReg = 0;
 	_lcce->leftCycle = 0;
-	_lcce->issuableFlag = false;
+	_lcce->executedFlag = false;
 }
 
 /* Get operation latencies of instruction */
@@ -1562,7 +1601,10 @@ int DefaultRename<Impl>::getLatency(DynInstPtr &inst)
 	return (int)op_latency;
 }
 
-/* Check if there is dependency with the result of preceding instructions */
+/* ***********************************************************************
+ * Check if there is dependency with the result of preceding instructions 
+ * Compare source operands with destination register in LCCE List
+ * **********************************************************************/
 template <typename Impl>
 bool DefaultRename<Impl>::isThereDependency(DynInstPtr &inst)
 {
@@ -1573,14 +1615,16 @@ bool DefaultRename<Impl>::isThereDependency(DynInstPtr &inst)
 	unsigned num_of_src_regs = inst->numSrcRegs();
 	int list_size = LCCEList.size();
 	int num_of_dependent_inst = 0;
-	int latency = getLatency(inst);
+	int latency = 1;
+	int highestCycle = -999;
 
 	for(int src_idx = 0; src_idx < num_of_src_regs; src_idx++)
 	{
+		int src_reg = (int)inst->getSrcReg(src_idx);
+
 		for(int idx = 0; idx < list_size; idx++)
 		{
 			int dest_reg = LCCEList[idx]->destReg;
-			int src_reg = (int)inst->getSrcReg(src_idx);
 
 			/* For debug */
 			DPRINTF(Rename, " ******** Renamed Src Reg : %d [%lli] with "
@@ -1589,34 +1633,38 @@ bool DefaultRename<Impl>::isThereDependency(DynInstPtr &inst)
 					inst->seqNum, 
 					inst->pcState());
 		
+			/* If there is RAW dependency */
 			if(src_reg == dest_reg)
 			{
 				num_of_dependent_inst++;
 				
-				/********************************************************* 
-				 * If instruction's latency is less than left cycle of 
-				 * corresponding instruction, this instruction can be 
-				 * executed  
-				 *
-				 * Difference: 1 -> Execution in Second Stage
-				 * Defference: 2 -> Execution in Third Stage
-				 * ********************************************************/
+				if(highestCycle < LCCEList[idx]->leftCycle)
+				{
+					highestCycle = LCCEList[idx]->leftCycle;
+				}
 
-				int difference = latency - (LCCEList[idx]->leftCycle);
-				if(difference == 1)
-				{
-					numOfInstsInSecondStage++;
-				}
-				else if(difference == 2)
-				{
-					numOfInstsInThirdStage++;
-				}
-				else
-				{
-					numOfNotForwardedInsts++;
-				}
+				break;
+
 			}
 		}
+	}
+
+/********************************************************* 
+* If instruction's latency is less than left cycle of 
+* corresponding instruction, this instruction can be 
+* executed  
+*
+* Difference: 1 -> Execution in Second Stage
+* Defference: 2 -> Execution in Third Stage
+* ********************************************************/
+
+	if((latency - highestCycle) == 1)
+	{
+		numOfInstsInSecondStage++;
+	}
+	else if((latency - highestCycle) == 2)
+	{
+		numOfInstsInThirdStage++;
 	}
 
 	if(num_of_dependent_inst > 0)
@@ -1636,8 +1684,11 @@ void DefaultRename<Impl>::decrementLeftCycles(void)
 
 	for(int idx = 0; idx<list_size; idx++)
 	{
-		if(LCCEList[idx]->issuableFlag == true)
+		if(LCCEList[idx]->executedFlag == true)
+		{
 			LCCEList[idx]->leftCycle--;
+			LCCEList[idx]->executedFlag = false;
+		}
 	}
 }
 
@@ -1664,10 +1715,9 @@ void DefaultRename<Impl>::deleteIssuedLCCE(void)
 
 	for(int idx = 0; idx < list_size; idx++)
 	{
-		LCCE *lcce = LCCEList[idx];
 		if(LCCEList[idx]->leftCycle == 0)
 		{
-			delete (lcce);
+//			delete (lcce);
 //			delete (LCCEList[idx]);
 			LCCEList.erase(LCCEList.begin() + idx);
 			numberOfDeletedInstsInLCCEList++;
@@ -1683,6 +1733,63 @@ void DefaultRename<Impl>::setDestRegInLCCE(DynInstPtr &inst, LCCE *instLCCE)
 //		return;
 
 //	unsigned num_of_dest_reg = inst->numDestRegs();
+
+}
+
+/* Check if there is destination register entry in LCCE List */
+template <typename Impl>
+bool DefaultRename<Impl>::doesDestRegExist(int dest_reg)
+{
+	if(LCCEList.empty())
+		return false;
+
+	int list_size = LCCEList.size();
+
+	for(int listIdx = 0; listIdx < list_size; listIdx++)
+	{
+		if(LCCEList[listIdx]->destReg == dest_reg)
+		{
+			return true;
+		}
+	}
+
+	return false;
+}
+
+/* Get pointer of LCCE List */
+template <typename Impl>
+typename DefaultRename<Impl>::LCCE* DefaultRename<Impl>::getPointerOfLCCEByDestReg(int _destReg)
+{
+	if(LCCEList.empty())
+		return NULL;
+
+	LCCE *lcce = NULL;
+	auto iter = LCCEList.begin();
+
+	for(; iter < LCCEList.end(); iter++)
+	{
+		if((*iter)->destReg == _destReg)
+		{
+			lcce = (*iter);
+			return lcce;
+		}
+	}
+
+	return lcce;
+}
+
+/* Update executed flag */
+template <typename Impl>
+void DefaultRename<Impl>::updateExecutedFlag(DynInstPtr &_inst, LCCE *lcce)
+{
+	if(LCCEList.empty())
+		return;
+
+	if(_inst->readyToIssue() && !isThereDependency(_inst))
+	{
+//		numOfExecutableInsts++;
+		lcce->executedFlag = true;
+	}
 
 }
 
