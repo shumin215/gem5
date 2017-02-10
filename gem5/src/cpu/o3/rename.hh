@@ -132,12 +132,12 @@ class DefaultRename
 	 ***************************************************************/
 	struct LCCE
 	{
-		int destReg; 		// destination register of an instruction
 		int leftCycle; 		// left cycle of instruction operations
 		bool availableFlag; 	// if all physical registers are ready to be issued 
 		ExecutionType executionType;
 	};
 
+	LCCE **LCCEArray;
 	std::vector<LCCE*> LCCEList;
 
   private:
@@ -322,23 +322,11 @@ class DefaultRename
 	/* Get operation latencies of instruction */
 	int getLatency(DynInstPtr &inst);
 
-	/* Check if there is dependency with the result of preceding instructions */
-	bool isThereDependency(DynInstPtr &inst);
-
 	/* Update Left Cycles Entry each cycle in LCCE list */
 	void decrementLeftCycles(void);
 
-	/* Update the issued LCCE, namely left cycle : 0 entry is deleted */
-	void deleteIssuedLCCE(void);	
-
-	/* Check if there is destination register entry in LCCE List */
-	bool doesDestRegExist(int dest_reg);
-
 	/* Get pointer of LCCE List */
-	LCCE* getPointerOfLCCEByDestReg(int _destReg);
-
-	/* Update Executed Flag */
-	void updateAvailableFlag(DynInstPtr &_inst, LCCE *lcce);
+//	LCCE* getPointerOfLCCEByDestReg(int _destReg);
 
 	/* Allocate LCCE Entry in LCCE List */
 	void allocateLCCE(int dest_reg, LCCE * &_lcce, DynInstPtr &_inst);
@@ -347,13 +335,7 @@ class DefaultRename
 	int getNotReadySrcReg(DynInstPtr &inst, int *notReadySrcArray);
 
 	/* Check that instruction is being executed in IXU */
-	bool isInstReadyToBeForwarded(DynInstPtr &inst, int *srcArray);
-
-	/**********************************************
-	 * If instruction was already executed in IXU 
-	 * immediately instruction can be executed 
-	 * ********************************************/
-	bool wasInstExecutedInIXU(DynInstPtr &inst, int *srcArray);
+	bool isInstReadyToBeForwarded(DynInstPtr &inst, LCCE *_currentLCCE, int *srcArray, int src_arr_size);
 
   private:
 

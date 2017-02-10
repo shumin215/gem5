@@ -60,6 +60,9 @@
 
 #include "cpu/o3/fu_pool.hh"
 
+#define ENTRY_SIZE 2000
+#define MAX_IXU_DEPTH 3
+
 using namespace std;
 
 template <class Impl>
@@ -76,6 +79,15 @@ DefaultRename<Impl>::DefaultRename(O3CPU *_cpu, DerivO3CPUParams *params)
 		fuPoolInRenameStage(params->fuPool)
 {
 	assert(fuPoolInRenameStage);
+
+	/* Initialize LCCE Array */
+	LCCEArray = new LCCE*[ENTRY_SIZE];
+
+	for(int i=0; i<ENTRY_SIZE; i++)
+	{
+		LCCEArray[i] = new LCCE;
+		initializeLCCE(LCCEArray[i]);
+	}
 
     if (renameWidth > Impl::MaxWidth)
         fatal("renameWidth (%d) is larger than compiled limit (%d),\n"
@@ -207,12 +219,6 @@ DefaultRename<Impl>::regStats()
 	numOfNotForwardedInsts
         .name(name() + ".NotForwardedInsts")
         .desc("count of not pre-execution instructions in rename stage")
-        .flags(Stats::total)
-        ;
-
-	numberOfDeletedInstsInLCCEList
-        .name(name() + ".DeletedInstsInLCCEList")
-        .desc("count of deleted instructions in LCCE List")
         .flags(Stats::total)
         ;
 
@@ -789,10 +795,9 @@ DefaultRename<Impl>::renameInsts(ThreadID tid)
 			for(int idx = 0; idx < num_of_dest_regs; idx++)
 			{
 				int dest_reg = (int)inst->getDestRegister(idx);
-				LCCE *newLCCE = NULL;
 
-				/* Allocate LCCE memory and push new LCCE to LCCE List */
-				allocateLCCE(dest_reg, newLCCE, inst);
+				assert(dest_reg < ENTRY_SIZE);
+				LCCE *newLCCE = LCCEArray[dest_reg];
 
 			/* 1. All source operands are available from register files */
 				if(inst->readyToIssue())
@@ -804,24 +809,17 @@ DefaultRename<Impl>::renameInsts(ThreadID tid)
 				else
 				{
 					int *srcArray = new int[10];
-					getNotReadySrcReg(inst, srcArray);
+					int src_arr_size = getNotReadySrcReg(inst, srcArray);
 
 			/* 2. Not ready source registers are on being executed in IXU */
-					if(isInstReadyToBeForwarded(inst, srcArray))
+			/* 3. By IXU execution, instruction is ready to issue, 
+			 *    but not detected in simulation. Because we didn't 
+			 *    implement the IXU. */
+					if(isInstReadyToBeForwarded(inst, newLCCE, srcArray, src_arr_size))
 					{
 						newLCCE->executionType = IXU;
 						newLCCE->availableFlag = false;
 					}
-			/* 3. By IXU execution, instruction is ready to issue, 
-			 *    but not detected in simulation. Because we didn't 
-			 *    implement the IXU. */
-//					else if(wasInstExecutedInIXU(inst, srcArray))
-//					{
-//						newLCCE->executionType = IXU;
-//						newLCCE->availableFlag = false;
-//
-//						numOfExecutableInsts++;
-//					}
 			/* The others that instructions can't be executed in IXU */
 					else
 					{
@@ -1581,7 +1579,6 @@ DefaultRename<Impl>::dumpHistory()
 template <typename Impl>
 void DefaultRename<Impl>::initializeLCCE(LCCE *_lcce)
 {
-	_lcce->destReg = -1;
 	_lcce->leftCycle = -1;
 	_lcce->availableFlag = false;
 	_lcce->executionType = IXU;
@@ -1607,218 +1604,46 @@ int DefaultRename<Impl>::getLatency(DynInstPtr &inst)
 	return (int)op_latency;
 }
 
-/* ***********************************************************************
- * Check if there is dependency with the result of preceding instructions 
- * Compare source operands with destination register in LCCE List
- * **********************************************************************/
-template <typename Impl>
-bool DefaultRename<Impl>::isThereDependency(DynInstPtr &inst)
-{
-	/* if there are no entries in LCCE List */
-	if(LCCEList.empty())
-		return false;
-
-	unsigned num_of_src_regs = inst->numSrcRegs();
-	int list_size = LCCEList.size();
-	int num_of_dependent_inst = 0;
-	int latency = 1;
-	int highestCycle = -999;
-
-	for(int src_idx = 0; src_idx < num_of_src_regs; src_idx++)
-	{
-		int src_reg = (int)inst->getSrcReg(src_idx);
-
-		for(int idx = 0; idx < list_size; idx++)
-		{
-			int dest_reg = LCCEList[idx]->destReg;
-
-			/* For debug */
-			DPRINTF(Rename, " ******** Renamed Src Reg : %d [%lli] with "
-					"PC %s.***********\n", 
-					src_reg,
-					inst->seqNum, 
-					inst->pcState());
-		
-			/* If there is RAW dependency */
-			if(src_reg == dest_reg)
-			{
-				num_of_dependent_inst++;
-				
-				if(highestCycle < LCCEList[idx]->leftCycle)
-				{
-					highestCycle = LCCEList[idx]->leftCycle;
-				}
-
-				break;
-
-			}
-		}
-	}
-
-/********************************************************* 
-* If instruction's latency is less than left cycle of 
-* corresponding instruction, this instruction can be 
-* executed  
-*
-* Difference: 1 -> Execution in Second Stage
-* Defference: 2 -> Execution in Third Stage
-* ********************************************************/
-
-	if((latency - highestCycle) == 1)
-	{
-		numOfInstsInSecondStage++;
-	}
-	else if((latency - highestCycle) == 2)
-	{
-		numOfInstsInThirdStage++;
-	}
-
-	if(num_of_dependent_inst > 0)
-		return true;
-	else
-		return false;
-}
 
 /* Update Left Cycles Entry each cycle in LCCE list */
 template <typename Impl>
 void DefaultRename<Impl>::decrementLeftCycles(void)
 {
-	int list_size = LCCEList.size();
+	assert(LCCEArray != NULL);
 
-	if(list_size == 0)
-		return;
-
-	for(int idx = 0; idx<list_size; idx++)
+	for(int idx = 0; idx<ENTRY_SIZE; idx++)
 	{
-		if(LCCEList[idx]->leftCycle > 0)
-			LCCEList[idx]->leftCycle--;
+		if(LCCEArray[idx]->leftCycle > 0)
+			LCCEArray[idx]->leftCycle--;
 
-		if(LCCEList[idx]->leftCycle == 0)
+		if(LCCEArray[idx]->leftCycle == 0)
 		{
-			LCCEList[idx]->availableFlag = true;
+			LCCEArray[idx]->availableFlag = true;
 		}
 	}
-}
-
-/* Update the issued LCCE, namely left cycle : 0 entry is deleted */
-template <typename Impl>
-void DefaultRename<Impl>::deleteIssuedLCCE(void)	
-{
-	int list_size = LCCEList.size();
-
-	if(LCCEList.empty())
-		return;
-
-//	auto iter = LCCEList.begin();
-//	auto iter_end = LCCEList.end();
-//	for(; iter != NULL; iter++)
-//	{
-//		if((*iter)->leftCycle == 0)
-//		{
-//			delete (*iter);
-//			LCCEList.erase(iter);
-//			numberOfDeletedInstsInLCCEList++;
-//		}
-//	}
-
-	for(int idx = 0; idx < list_size; idx++)
-	{
-		if(LCCEList[idx]->leftCycle == 0)
-		{
-//			delete (lcce);
-//			delete (LCCEList[idx]);
-			LCCEList.erase(LCCEList.begin() + idx);
-			numberOfDeletedInstsInLCCEList++;
-		}
-	}
-}
-
-/* Check if there is destination register entry in LCCE List */
-template <typename Impl>
-bool DefaultRename<Impl>::doesDestRegExist(int dest_reg)
-{
-	if(LCCEList.empty())
-		return false;
-
-	int list_size = LCCEList.size();
-
-	for(int listIdx = 0; listIdx < list_size; listIdx++)
-	{
-		if(LCCEList[listIdx]->destReg == dest_reg)
-		{
-			return true;
-		}
-	}
-
-	return false;
 }
 
 /* Get pointer of LCCE List */
-template <typename Impl>
-typename DefaultRename<Impl>::LCCE* DefaultRename<Impl>::getPointerOfLCCEByDestReg(int _destReg)
-{
-	if(LCCEList.empty())
-		return NULL;
-
-	LCCE *lcce = NULL;
-	auto iter = LCCEList.begin();
-
-	for(; iter < LCCEList.end(); iter++)
-	{
-		if((*iter)->destReg == _destReg)
-		{
-			lcce = (*iter);
-			return lcce;
-		}
-	}
-
-	return lcce;
-}
-
-/* Update executed flag */
-template <typename Impl>
-void DefaultRename<Impl>::updateAvailableFlag(DynInstPtr &_inst, LCCE *lcce)
-{
-	if(LCCEList.empty())
-		return;
-
-	if(_inst->readyToIssue() && !isThereDependency(_inst))
-	{
-//		numOfExecutableInsts++;
-		lcce->availableFlag = true;
-	}
-
-}
-
-/* ******************************************************************
- *
- * Allocate LCCE if there isn't corresponding LCCE in List 
- * If not, existing entry is used
- *
- * In order to search existing entry, need destination register index
- *
- * *******************************************************************/
-template <typename Impl>
-void DefaultRename<Impl>::allocateLCCE(int dest_reg, LCCE* &_lcce, DynInstPtr &_inst)
-{
-	if(doesDestRegExist(dest_reg))
-	{
-		_lcce = getPointerOfLCCEByDestReg(dest_reg);
-
-		initializeLCCE(_lcce);
-	}
-	/* there is no dest register entry, so need allocation */
-	else
-	{
-		_lcce = new LCCE;
-		initializeLCCE(_lcce);
-		_lcce->destReg = dest_reg;
-
-		LCCEList.push_back(_lcce);
-
-		numOfLCCEEntries++;
-	}
-}
+//template <typename Impl>
+//typename DefaultRename<Impl>::LCCE* DefaultRename<Impl>::getPointerOfLCCEByDestReg(int _destReg)
+//{
+//	if(LCCEList.empty())
+//		return NULL;
+//
+//	LCCE *lcce = NULL;
+//	auto iter = LCCEList.begin();
+//
+//	for(; iter < LCCEList.end(); iter++)
+//	{
+//		if((*iter)->destReg == _destReg)
+//		{
+//			lcce = (*iter);
+//			return lcce;
+//		}
+//	}
+//
+//	return lcce;
+//}
 
 /* Get not ready source registers */
 template <typename Impl>
@@ -1839,24 +1664,17 @@ int DefaultRename<Impl>::getNotReadySrcReg(DynInstPtr &inst, int *notReadySrcArr
 		}
 	}
 
-	return (arrayIdx+1);
+	return arrayIdx;
 }
 
 /* Check that instruction is being executed in IXU */
 template <typename Impl>
-bool DefaultRename<Impl>::isInstReadyToBeForwarded(DynInstPtr &inst, int *srcArray)
+bool DefaultRename<Impl>::isInstReadyToBeForwarded(DynInstPtr &inst, LCCE *_currentLCCE, int *srcArray, int src_arr_size)
 {
-	if(LCCEList.empty())
-	{
-		return false;
-	}
-
-	int list_size = LCCEList.size();
-	int array_size = sizeof(srcArray) / sizeof(int);
+	int array_size = src_arr_size;
 	int latency = 1;
 	int highestCycle = -999;
 	LCCE *lcce = NULL;
-	LCCE *currentLCCE = LCCEList.back();
 	bool isComplete[10];
 
 	/* Initialize bool array to true */
@@ -1865,48 +1683,39 @@ bool DefaultRename<Impl>::isInstReadyToBeForwarded(DynInstPtr &inst, int *srcArr
 
 	for(int idx = 0; idx < array_size; idx++)
 	{
-		int src_reg = *(srcArray+idx);
+		int src_reg = srcArray[idx];
 
-		for(int list_idx = 0; list_idx < list_size; list_idx++)
+		assert(src_reg < ENTRY_SIZE);
+
+		lcce = LCCEArray[src_reg];
+
+		if(lcce->executionType == IXU)
 		{
-			lcce = LCCEList[list_idx];
-			int dest_reg = lcce->destReg;
-
-			/* If src reg equals dest reg, namely matching occurs */
-			if(src_reg == dest_reg)
+			if(lcce->availableFlag == true)
 			{
-				if(lcce->executionType == IXU)
-				{
-					if(lcce->availableFlag == true)
-					{
-						isComplete[idx] = true;
-						break;
-					}
-					else
-					{
-						isComplete[idx] = false;
-					}
-
-					/* Dest register can be forwarded to src register */
-					if(highestCycle < lcce->leftCycle)
-					{
-						highestCycle = lcce->leftCycle;
-					}
-					else
-					{
-						return false;
-					}
-
-				/* Since we found the physical register matching,
-				 * we search the other not ready source register */
-					break;
-				}
-				/* Instruction is executed in OXU */
-				else
-				{
-					return false;
-				}
+				isComplete[idx] = true;
+				break;
 			}
+			else
+			{
+				isComplete[idx] = false;
+			}
+
+			/* Dest register can be forwarded to src register */
+			if(lcce->leftCycle < MAX_IXU_DEPTH)
+			{
+				if(highestCycle <= lcce->leftCycle)
+					highestCycle = lcce->leftCycle;
+			}
+			else
+			{
+				return false;
+			}
+		}
+		/* Instruction is executed in OXU */
+		else
+		{
+			return false;
 		}
 	}
 
@@ -1921,7 +1730,7 @@ bool DefaultRename<Impl>::isInstReadyToBeForwarded(DynInstPtr &inst, int *srcArr
 
 	if(isComplete[0] == true)
 	{
-		currentLCCE->leftCycle = latency;
+		_currentLCCE->leftCycle = latency;
 		numOfExecutableInsts++;
 		return true;
 	}
@@ -1935,73 +1744,27 @@ bool DefaultRename<Impl>::isInstReadyToBeForwarded(DynInstPtr &inst, int *srcArr
 * Defference: 2 -> Execution in Third Stage
 * ********************************************************/
 
-	if(currentLCCE != NULL)
+	if(_currentLCCE != NULL)
 	{
 		if(highestCycle == 1)
 		{
-			currentLCCE->leftCycle = 1+latency;
+			_currentLCCE->leftCycle = 1+latency;
 			numOfInstsInSecondStage++;
 			return true;
 		}
 		else if(highestCycle == 2)
 		{
-			currentLCCE->leftCycle = 2+latency;
+			_currentLCCE->leftCycle = 2+latency;
 			numOfInstsInThirdStage++;
 			return true;
 		}
 		else
 		{
-			currentLCCE->leftCycle = latency;
+			_currentLCCE->leftCycle = latency;
 		}
 	}
 
 	return false;
 }
 
-/**********************************************
- * If instruction was already executed in IXU 
- * immediately instruction can be executed 
- * ********************************************/
-template <typename Impl>
-bool DefaultRename<Impl>::wasInstExecutedInIXU(DynInstPtr &inst, int *srcArray)
-{
-	if(LCCEList.empty())
-	{
-		return false;
-	}
-
-	int list_size = LCCEList.size();
-	int array_size = sizeof(srcArray) / sizeof(int);
-//	int latency = 1;
-	bool isComplete = false;
-//	int numOfDependentInsts = 0;
-	LCCE *lcce = NULL;
-//	LCCE *currentLCCE = LCCEList.back();
-
-	for(int idx = 0; idx < array_size; idx++)
-	{
-		int src_reg = *(srcArray+idx);
-
-		for(int list_idx = 0; list_idx < list_size; list_idx++)
-		{
-			lcce = LCCEList[list_idx];
-			int dest_reg = lcce->destReg;
-
-			/* If src reg equals dest reg, namely matching occurs */
-			if(src_reg == dest_reg)
-			{
-				if(lcce->executionType == IXU &&
-						lcce->availableFlag == true)
-				{
-					isComplete = true;
-					break;
-				}
-				
-				return false;
-			}
-		}
-	}
-
-	return isComplete;
-}
 #endif//__CPU_O3_RENAME_IMPL_HH__
