@@ -785,8 +785,8 @@ DefaultRename<Impl>::renameInsts(ThreadID tid)
 		if(!inst->isMemRef())
 		{
 			int num_of_dest_regs = (int)inst->numDestRegs();
-			int latency = 1;
-//			int latency = getLatency(inst);
+//			int latency = 1;
+			int latency = getLatency(inst);
 
 			/* If there is no destination operand */
 //			if(num_of_dest_regs == 0)
@@ -1592,9 +1592,14 @@ int DefaultRename<Impl>::getLatency(DynInstPtr &inst)
 	OpClass op_class = inst->opClass();
 	int idx = FUPool::NoCapableFU;
 
+	/* This is for debuging verification of getting latencies from each op */
+//	if(op_class == Enums::IntMult)
+//		idx++;
+
 	if(op_class != No_OpClass)
 	{
-		idx = fuPoolInRenameStage->getUnit(op_class);
+		idx = 10;
+//		idx = fuPoolInRenameStage->getUnit(op_class);
 		if(idx > FUPool::NoFreeFU)
 		{
 			op_latency = fuPoolInRenameStage->getOpLatency(op_class);
@@ -1623,28 +1628,6 @@ void DefaultRename<Impl>::decrementLeftCycles(void)
 	}
 }
 
-/* Get pointer of LCCE List */
-//template <typename Impl>
-//typename DefaultRename<Impl>::LCCE* DefaultRename<Impl>::getPointerOfLCCEByDestReg(int _destReg)
-//{
-//	if(LCCEList.empty())
-//		return NULL;
-//
-//	LCCE *lcce = NULL;
-//	auto iter = LCCEList.begin();
-//
-//	for(; iter < LCCEList.end(); iter++)
-//	{
-//		if((*iter)->destReg == _destReg)
-//		{
-//			lcce = (*iter);
-//			return lcce;
-//		}
-//	}
-//
-//	return lcce;
-//}
-
 /* Get not ready source registers */
 template <typename Impl>
 int DefaultRename<Impl>::getNotReadySrcReg(DynInstPtr &inst, int *notReadySrcArray)
@@ -1672,12 +1655,13 @@ template <typename Impl>
 bool DefaultRename<Impl>::isInstReadyToBeForwarded(DynInstPtr &inst, LCCE *_currentLCCE, int *srcArray, int src_arr_size)
 {
 	int array_size = src_arr_size;
-	int latency = 1;
+	int latency = getLatency(inst);
+//	int latency = 1;
 	int highestCycle = -999;
 	LCCE *lcce = NULL;
 	bool isComplete[10];
 
-	/* Initialize bool array to true */
+	/* Initialize bool array to false */
 	for(int i=0; i<10; i++)
 		isComplete[i] = false;
 
@@ -1694,7 +1678,7 @@ bool DefaultRename<Impl>::isInstReadyToBeForwarded(DynInstPtr &inst, LCCE *_curr
 			if(lcce->availableFlag == true)
 			{
 				isComplete[idx] = true;
-				break;
+				continue;
 			}
 			else
 			{
