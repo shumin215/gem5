@@ -60,7 +60,7 @@
 
 #include "cpu/o3/fu_pool.hh"
 
-#define ENTRY_SIZE 2000
+#define ENTRY_SIZE 1000
 #define MAX_IXU_DEPTH 3
 
 using namespace std;
@@ -194,17 +194,16 @@ DefaultRename<Impl>::regStats()
         ;
 	/****************** Additional Stats **********************/
 
-	numOfExecutableInsts
-        .name(name() + ".ExecutableInsts")
-        .desc("count of executable instructions in rename stage immediately")
-        .flags(Stats::total)
-        ;
 	numOfAllRenamedInsts
         .name(name() + ".AllRenamedInsts")
         .desc("count of all renamed instructions in rename stage")
         .flags(Stats::total)
         ;
-
+	numOfExecutableInsts
+        .name(name() + ".FirstStageExecInsts")
+        .desc("count of instructions that can be executed in first stage of pre-execution structure")
+        .flags(Stats::total)
+        ;
 	numOfInstsInSecondStage
         .name(name() + ".SecondStageExecInsts")
         .desc("count of executable instructions in second stage of pre-execution structure")
@@ -216,15 +215,15 @@ DefaultRename<Impl>::regStats()
         .flags(Stats::total)
         ;
 
-	numOfNotForwardedInsts
-        .name(name() + ".NotForwardedInsts")
-        .desc("count of not pre-execution instructions in rename stage")
+	numOfCommittedInstsInFrontEnd
+        .name(name() + ".CommittedInstsInFrontEnd")
+        .desc("count of committed instructions after front-end pre-execution")
         .flags(Stats::total)
         ;
 
-	numOfLCCEEntries
-        .name(name() + ".NumberOfAddedLCCEEntries")
-        .desc("count of added entries in LCCE List")
+	numOfOriginExecutableInsts
+        .name(name() + ".OriginExecutableInsts")
+        .desc("count of original executable instructions after rename stage immediately")
         .flags(Stats::total)
         ;
 
@@ -804,7 +803,6 @@ DefaultRename<Impl>::renameInsts(ThreadID tid)
 				{
 					newLCCE->executionType = IXU;
 					newLCCE->leftCycle = latency;
-					newLCCE->availableFlag = false;
 				}
 				else
 				{
@@ -815,21 +813,25 @@ DefaultRename<Impl>::renameInsts(ThreadID tid)
 			/* 3. By IXU execution, instruction is ready to issue, 
 			 *    but not detected in simulation. Because we didn't 
 			 *    implement the IXU. */
-					if(isInstReadyToBeForwarded(inst, newLCCE, srcArray, src_arr_size))
+					if(isInstReadyToBeForwarded(
+								inst, 
+								newLCCE, 
+								srcArray, 
+								src_arr_size))
 					{
 						newLCCE->executionType = IXU;
-						newLCCE->availableFlag = false;
 					}
 			/* The others that instructions can't be executed in IXU */
 					else
 					{
 						newLCCE->leftCycle = latency;
 						newLCCE->executionType = OXU;
-						newLCCE->availableFlag = false;
 					}
 
 					delete[] srcArray;
 				}
+
+				newLCCE->availableFlag = false;
 			}
 		}
 
@@ -837,6 +839,7 @@ DefaultRename<Impl>::renameInsts(ThreadID tid)
 		if(inst->readyToIssue() && !(inst->isMemRef()))
 		{
 			numOfExecutableInsts++;
+			numOfOriginExecutableInsts++;
 		}
 
 		numOfAllRenamedInsts++;
@@ -1590,7 +1593,7 @@ int DefaultRename<Impl>::getLatency(DynInstPtr &inst)
 {
 	Cycles op_latency = Cycles(1);
 	OpClass op_class = inst->opClass();
-	int idx = FUPool::NoCapableFU;
+//	int idx = FUPool::NoCapableFU;
 
 	/* This is for debuging verification of getting latencies from each op */
 //	if(op_class == Enums::IntMult)
@@ -1598,12 +1601,12 @@ int DefaultRename<Impl>::getLatency(DynInstPtr &inst)
 
 	if(op_class != No_OpClass)
 	{
-		idx = 10;
+//		idx = 10;
 //		idx = fuPoolInRenameStage->getUnit(op_class);
-		if(idx > FUPool::NoFreeFU)
-		{
+//		if(idx > FUPool::NoFreeFU)
+//		{
 			op_latency = fuPoolInRenameStage->getOpLatency(op_class);
-		}
+//		}
 	}
 
 	return (int)op_latency;
@@ -1618,8 +1621,16 @@ void DefaultRename<Impl>::decrementLeftCycles(void)
 
 	for(int idx = 0; idx<ENTRY_SIZE; idx++)
 	{
-		if(LCCEArray[idx]->leftCycle > 0)
-			LCCEArray[idx]->leftCycle--;
+		if(LCCEArray[idx]->executionType == IXU)
+		{
+			if(LCCEArray[idx]->leftCycle > 0)
+				LCCEArray[idx]->leftCycle--;
+		}
+		/* About OXU instruction */
+		else
+		{
+			LCCEArray[idx]->availableFlag = false;
+		}
 
 		if(LCCEArray[idx]->leftCycle == 0)
 		{
@@ -1675,11 +1686,13 @@ bool DefaultRename<Impl>::isInstReadyToBeForwarded(DynInstPtr &inst, LCCE *_curr
 
 		if(lcce->executionType == IXU)
 		{
+			// This source register is ready to be used
 			if(lcce->availableFlag == true)
 			{
 				isComplete[idx] = true;
 				continue;
 			}
+			// This source register couldn't run immediately
 			else
 			{
 				isComplete[idx] = false;
@@ -1712,10 +1725,12 @@ bool DefaultRename<Impl>::isInstReadyToBeForwarded(DynInstPtr &inst, LCCE *_curr
 		isComplete[0] &= isComplete[i];
 	}
 
+	/* All source registers are ready to be issued immediately */
 	if(isComplete[0] == true)
 	{
 		_currentLCCE->leftCycle = latency;
 		numOfExecutableInsts++;
+		numOfCommittedInstsInFrontEnd++;
 		return true;
 	}
 
@@ -1724,8 +1739,8 @@ bool DefaultRename<Impl>::isInstReadyToBeForwarded(DynInstPtr &inst, LCCE *_curr
 * corresponding instruction, this instruction can be 
 * executed  
 *
-* Difference: 1 -> Execution in Second Stage
-* Defference: 2 -> Execution in Third Stage
+* highestCycle: 1 -> Execution in Second Stage
+* highestCycle: 2 -> Execution in Third Stage
 * ********************************************************/
 
 	if(_currentLCCE != NULL)

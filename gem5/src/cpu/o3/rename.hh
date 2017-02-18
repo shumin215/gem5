@@ -582,11 +582,12 @@ class DefaultRename
     /** Number of instructions inserted into skid buffers. */
     Stats::Scalar renameSkidInsts;
 
-	/* Number of instructions that can be executed in rename stage immediately */
-	Stats::Scalar numOfExecutableInsts;
+	
 
 	/* Number of renamed instructions in rename stage */
 	Stats::Scalar numOfAllRenamedInsts;
+	/* Number of instructions that can be executed in first stage of pre-execution structure */
+	Stats::Scalar numOfExecutableInsts;
 
 	/* Number of executable instruction that can be executed in 
 	 * second stage of pre-execution structure */
@@ -596,15 +597,11 @@ class DefaultRename
 	 * third stage of pre-execution structure */
 	Stats::Scalar numOfInstsInThirdStage;
 
-	/* Number of not forwarded instruction that doesn't contain 
-	 * 'numOfInstsInSecondStage' and 'numOfInstsInThirdStage' */
-	Stats::Scalar numOfNotForwardedInsts;
+	/* Number of committed instruction at front-end IXU */
+	Stats::Scalar numOfCommittedInstsInFrontEnd;
 
-	/* Number of deleted instruction that is complete to be issued in LCCE List */
-	Stats::Scalar numberOfDeletedInstsInLCCEList;
-
-	/* Number of LCCE entries */
-	Stats::Scalar numOfLCCEEntries;
+	/* Number of original executable instructions after rename stage immediately */
+	Stats::Scalar numOfOriginExecutableInsts;
 
 };
 
