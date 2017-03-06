@@ -752,6 +752,8 @@ InstructionQueue<Impl>::scheduleReadyInsts()
     IssueStruct *i2e_info = issueToExecuteQueue->access(0);
 
     DynInstPtr mem_inst;
+
+	/* Check if there is an instruction completed by DTB translation */
     while (mem_inst = getDeferredMemInstToExecute()) {
         addReadyMemInst(mem_inst);
     }
@@ -1392,6 +1394,7 @@ InstructionQueue<Impl>::addIfReady(DynInstPtr &inst)
             return;
         }
 
+		/* The other instructions except for memory operations */
         OpClass op_class = inst->opClass();
 
         DPRINTF(IQ, "Instruction is ready to issue, putting it onto "

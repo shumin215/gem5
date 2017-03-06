@@ -1630,6 +1630,8 @@ void DefaultRename<Impl>::decrementLeftCycles(void)
 		else
 		{
 			LCCEArray[idx]->availableFlag = false;
+
+			return;
 		}
 
 		if(LCCEArray[idx]->leftCycle == 0)
