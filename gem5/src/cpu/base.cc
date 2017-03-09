@@ -45,18 +45,19 @@
  *          Rick Strong
  */
 
+#include "cpu/base.hh"
+
 #include <iostream>
 #include <sstream>
 #include <string>
 
 #include "arch/tlb.hh"
-#include "base/loader/symtab.hh"
 #include "base/cprintf.hh"
+#include "base/loader/symtab.hh"
 #include "base/misc.hh"
 #include "base/output.hh"
 #include "base/trace.hh"
 #include "cpu/checker/cpu.hh"
-#include "cpu/base.hh"
 #include "cpu/cpuevent.hh"
 #include "cpu/profile.hh"
 #include "cpu/thread_context.hh"
@@ -134,7 +135,8 @@ BaseCPU::BaseCPU(Params *p, bool is_checker)
       numThreads(p->numThreads), system(p->system),
       functionTraceStream(nullptr), currentFunctionStart(0),
       currentFunctionEnd(0), functionEntryTick(0),
-      addressMonitor(p->numThreads)
+      addressMonitor(p->numThreads),
+      syscallRetryLatency(p->syscallRetryLatency)
 {
     // if Python did not provide a valid ID, do it here
     if (_cpuId == -1 ) {

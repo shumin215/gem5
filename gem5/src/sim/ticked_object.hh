@@ -48,8 +48,10 @@
 #ifndef __SIM_TICKED_OBJECT_HH__
 #define __SIM_TICKED_OBJECT_HH__
 
-#include "params/TickedObject.hh"
 #include "sim/clocked_object.hh"
+#include "sim/core.hh"
+
+class TickedObjectParams;
 
 /** Ticked attaches gem5's event queue/scheduler to evaluate
  *  calls and provides a start/stop interface to ticking.
@@ -76,12 +78,17 @@ class Ticked : public Serializable
         {
             ++owner.tickCycles;
             ++owner.numCycles;
+			
             owner.countCycles(Cycles(1));
             owner.evaluate();
             if (owner.running) {
                 owner.object.schedule(this,
                     owner.object.clockEdge(Cycles(1)));
             }
+			
+			/* JIP: big.LITTLE */
+			++SimClock::tickCycles;
+			++SimClock::numCycles;
         }
     };
 
@@ -134,6 +141,9 @@ class Ticked : public Serializable
             running = true;
             numCycles += cyclesSinceLastStopped();
             countCycles(cyclesSinceLastStopped());
+			
+			/* JIP: big.LITTLE */
+			SimClock::numCycles += cyclesSinceLastStopped();
         }
     }
 

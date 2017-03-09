@@ -28,17 +28,17 @@
  * Authors: Ali Saidi
  */
 
+#include "kern/linux/linux.hh"
+
 #include <cstdio>
 #include <string>
 
-#include "cpu/thread_context.hh"
 #include "debug/SyscallVerbose.hh"
-#include "kern/linux/linux.hh"
 #include "sim/process.hh"
 #include "sim/system.hh"
 
 int
-Linux::openSpecialFile(std::string path, LiveProcess *process,
+Linux::openSpecialFile(std::string path, Process *process,
                        ThreadContext *tc)
 {
     DPRINTF(SyscallVerbose, "Opening special file: %s\n", path.c_str());
@@ -59,7 +59,7 @@ Linux::openSpecialFile(std::string path, LiveProcess *process,
 }
 
 std::string
-Linux::procMeminfo(LiveProcess *process, ThreadContext *tc)
+Linux::procMeminfo(Process *process, ThreadContext *tc)
 {
     return csprintf("MemTotal:%12d kB\nMemFree: %12d kB\n",
             process->system->memSize() >> 10,

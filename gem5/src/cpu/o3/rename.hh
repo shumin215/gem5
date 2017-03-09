@@ -46,19 +46,13 @@
 
 #include <list>
 #include <utility>
-#include <vector>
 
-#include "base/types.hh"
 #include "base/statistics.hh"
 #include "config/the_isa.hh"
 #include "cpu/timebuf.hh"
 #include "sim/probe/probe.hh"
 
 struct DerivO3CPUParams;
-/* To get operation latency */
-class FUPool;
-
-
 
 /**
  * DefaultRename handles both single threaded and SMT rename. Its
@@ -120,26 +114,6 @@ class DefaultRename
         SerializeStall
     };
 
-	enum ExecutionType
-	{
-		IXU,
-		OXU
-	};
-
-	/************************************************************* 
-	 * Left Cycle Count Entry (LCCE) for checking benefit of 
-	 * multiple stages of pre-execution structure 
-	 ***************************************************************/
-	struct LCCE
-	{
-		int leftCycle; 		// left cycle of instruction operations
-		bool availableFlag; 	// if all physical registers are ready to be issued 
-		ExecutionType executionType;
-	};
-
-	LCCE **LCCEArray;
-	std::vector<LCCE*> LCCEList;
-
   private:
     /** Rename status. */
     RenameStatus _status;
@@ -156,7 +130,6 @@ class DefaultRename
      * for it needs to be undone
      */
     ProbePointArg<SeqNumRegPair> *ppSquashInRename;
-
 
   public:
     /** DefaultRename constructor. */
@@ -230,8 +203,6 @@ class DefaultRename
 
     /** Debugging function used to dump history buffer of renamings. */
     void dumpHistory();
-
-
 
   private:
     /** Reset this pipeline stage */
@@ -315,29 +286,6 @@ class DefaultRename
 
     /** Checks the signals and updates the status. */
     bool checkSignalsAndUpdate(ThreadID tid);
-
-	/* Initialize the Left Cycle Count Entry (LCCE) structure */
-	void initializeLCCE(LCCE *_lcce);
-
-	/* Get operation latencies of instruction */
-	int getLatency(DynInstPtr &inst);
-
-	/* Update Left Cycles Entry each cycle in LCCE list */
-	void decrementLeftCycles(void);
-
-	/* Get pointer of LCCE List */
-//	LCCE* getPointerOfLCCEByDestReg(int _destReg);
-
-	/* Allocate LCCE Entry in LCCE List */
-	void allocateLCCE(int dest_reg, LCCE * &_lcce, DynInstPtr &_inst);
-
-	/* Get not ready source registers */
-	int getNotReadySrcReg(DynInstPtr &inst, int *notReadySrcArray);
-
-	/* Check that instruction is being executed in IXU */
-	bool isInstReadyToBeForwarded(DynInstPtr &inst, LCCE *_currentLCCE, int *srcArray, int src_arr_size);
-
-  private:
 
     /** Either serializes on the next instruction available in the InstQueue,
      * or records that it must serialize on the next instruction to enter
@@ -518,9 +466,6 @@ class DefaultRename
     unsigned skidBufferMax;
 
     PhysRegIndex maxPhysicalRegs;
-	
-	/* Function unit pool in rename stage */
-	FUPool *fuPoolInRenameStage;
 
     /** Enum to record the source of a structure full stall.  Can come from
      * either ROB, IQ, LSQ, and it is priortized in that order.
@@ -581,28 +526,6 @@ class DefaultRename
     Stats::Scalar renamedTempSerializing;
     /** Number of instructions inserted into skid buffers. */
     Stats::Scalar renameSkidInsts;
-
-	
-
-	/* Number of renamed instructions in rename stage */
-	Stats::Scalar numOfAllRenamedInsts;
-	/* Number of instructions that can be executed in first stage of pre-execution structure */
-	Stats::Scalar numOfExecutableInsts;
-
-	/* Number of executable instruction that can be executed in 
-	 * second stage of pre-execution structure */
-	Stats::Scalar numOfInstsInSecondStage;
-
-	/* Number of executable instruction that can be executed in 
-	 * third stage of pre-execution structure */
-	Stats::Scalar numOfInstsInThirdStage;
-
-	/* Number of committed instruction at front-end IXU */
-	Stats::Scalar numOfCommittedInstsInFrontEnd;
-
-	/* Number of original executable instructions after rename stage immediately */
-	Stats::Scalar numOfOriginExecutableInsts;
-
 };
 
 #endif // __CPU_O3_RENAME_HH__

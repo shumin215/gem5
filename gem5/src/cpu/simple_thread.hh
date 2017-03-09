@@ -355,6 +355,12 @@ class SimpleThread : public ThreadState
         return _pcState.nextInstAddr();
     }
 
+    void
+    setNPC(Addr val)
+    {
+        _pcState.setNPC(val);
+    }
+
     MicroPC
     microPC()
     {
@@ -424,9 +430,9 @@ class SimpleThread : public ThreadState
     void setStCondFailures(unsigned sc_failures)
     { storeCondFailures = sc_failures; }
 
-    void syscall(int64_t callnum)
+    void syscall(int64_t callnum, Fault *fault)
     {
-        process->syscall(callnum, tc);
+        process->syscall(callnum, tc, fault);
     }
 
     uint64_t readIntRegFlat(int idx) { return intRegs[idx]; }

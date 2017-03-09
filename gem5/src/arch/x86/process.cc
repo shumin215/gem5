@@ -42,10 +42,14 @@
  *          Ali Saidi
  */
 
+#include "arch/x86/process.hh"
+
+#include <string>
+#include <vector>
+
+#include "arch/x86/isa_traits.hh"
 #include "arch/x86/regs/misc.hh"
 #include "arch/x86/regs/segment.hh"
-#include "arch/x86/isa_traits.hh"
-#include "arch/x86/process.hh"
 #include "arch/x86/system.hh"
 #include "arch/x86/types.hh"
 #include "base/loader/elf_object.hh"
@@ -56,8 +60,10 @@
 #include "debug/Stack.hh"
 #include "mem/multi_level_page_table.hh"
 #include "mem/page_table.hh"
+#include "sim/aux_vector.hh"
 #include "sim/process_impl.hh"
-#include "sim/syscall_emul.hh"
+#include "sim/syscall_desc.hh"
+#include "sim/syscall_return.hh"
 #include "sim/system.hh"
 
 using namespace std;
@@ -89,19 +95,27 @@ static const int ArgumentReg32[] = {
 static const int NumArgumentRegs32 M5_VAR_USED =
     sizeof(ArgumentReg) / sizeof(const int);
 
-X86LiveProcess::X86LiveProcess(LiveProcessParams * params, ObjectFile *objFile,
-        SyscallDesc *_syscallDescs, int _numSyscallDescs) :
-    LiveProcess(params, objFile), syscallDescs(_syscallDescs),
-    numSyscallDescs(_numSyscallDescs)
+X86Process::X86Process(ProcessParams * params, ObjectFile *objFile,
+                       SyscallDesc *_syscallDescs, int _numSyscallDescs)
+    : Process(params, objFile), syscallDescs(_syscallDescs),
+      numSyscallDescs(_numSyscallDescs)
 {
-    brk_point = objFile->dataBase() + objFile->dataSize() + objFile->bssSize();
-    brk_point = roundUp(brk_point, PageBytes);
+    memState->brkPoint = objFile->dataBase() + objFile->dataSize()
+                       + objFile->bssSize();
+    memState->brkPoint = roundUp(memState->brkPoint, PageBytes);
 }
 
-X86_64LiveProcess::X86_64LiveProcess(LiveProcessParams *params,
-        ObjectFile *objFile, SyscallDesc *_syscallDescs,
-        int _numSyscallDescs) :
-    X86LiveProcess(params, objFile, _syscallDescs, _numSyscallDescs)
+void X86Process::clone(ThreadContext *old_tc, ThreadContext *new_tc,
+                       Process *p, TheISA::IntReg flags)
+{
+    Process::clone(old_tc, new_tc, p, flags);
+    X86Process *process = (X86Process*)p;
+    *process = *this;
+}
+
+X86_64Process::X86_64Process(ProcessParams *params, ObjectFile *objFile,
+                             SyscallDesc *_syscallDescs, int _numSyscallDescs)
+    : X86Process(params, objFile, _syscallDescs, _numSyscallDescs)
 {
 
     vsyscallPage.base = 0xffffffffff600000ULL;
@@ -112,10 +126,10 @@ X86_64LiveProcess::X86_64LiveProcess(LiveProcessParams *params,
     // Set up stack. On X86_64 Linux, stack goes from the top of memory
     // downward, less the hole for the kernel address space plus one page
     // for undertermined purposes.
-    stack_base = (Addr)0x7FFFFFFFF000ULL;
+    memState->stackBase = (Addr)0x7FFFFFFFF000ULL;
 
     // Set pointer for next thread stack.  Reserve 8M for main stack.
-    next_thread_stack_base = stack_base - (8 * 1024 * 1024);
+    memState->nextThreadStackBase = memState->stackBase - (8 * 1024 * 1024);
 
     // "mmap_base" is a function which defines where mmap region starts in
     // the process address space.
@@ -125,11 +139,11 @@ X86_64LiveProcess::X86_64LiveProcess(LiveProcessParams *params,
     // We do not use any address space layout randomization in gem5
     // therefore the random fields become zero; the smallest gap space was
     // chosen but gap could potentially be much larger.
-    mmap_end = (Addr)0x7FFFF7FFF000ULL;
+    memState->mmapEnd = (Addr)0x7FFFF7FFF000ULL;
 }
 
 void
-I386LiveProcess::syscall(int64_t callnum, ThreadContext *tc)
+I386Process::syscall(int64_t callnum, ThreadContext *tc, Fault *fault)
 {
     TheISA::PCState pc = tc->pcState();
     Addr eip = pc.pc();
@@ -138,14 +152,13 @@ I386LiveProcess::syscall(int64_t callnum, ThreadContext *tc)
         pc.npc(vsyscallPage.base + vsyscallPage.vsysexitOffset);
         tc->pcState(pc);
     }
-    X86LiveProcess::syscall(callnum, tc);
+    X86Process::syscall(callnum, tc, fault);
 }
 
 
-I386LiveProcess::I386LiveProcess(LiveProcessParams *params,
-        ObjectFile *objFile, SyscallDesc *_syscallDescs,
-        int _numSyscallDescs) :
-    X86LiveProcess(params, objFile, _syscallDescs, _numSyscallDescs)
+I386Process::I386Process(ProcessParams *params, ObjectFile *objFile,
+                         SyscallDesc *_syscallDescs, int _numSyscallDescs)
+    : X86Process(params, objFile, _syscallDescs, _numSyscallDescs)
 {
     _gdtStart = ULL(0xffffd000);
     _gdtSize = PageBytes;
@@ -155,10 +168,10 @@ I386LiveProcess::I386LiveProcess(LiveProcessParams *params,
     vsyscallPage.vsyscallOffset = 0x400;
     vsyscallPage.vsysexitOffset = 0x410;
 
-    stack_base = _gdtStart;
+    memState->stackBase = _gdtStart;
 
     // Set pointer for next thread stack.  Reserve 8M for main stack.
-    next_thread_stack_base = stack_base - (8 * 1024 * 1024);
+    memState->nextThreadStackBase = memState->stackBase - (8 * 1024 * 1024);
 
     // "mmap_base" is a function which defines where mmap region starts in
     // the process address space.
@@ -168,11 +181,11 @@ I386LiveProcess::I386LiveProcess(LiveProcessParams *params,
     // We do not use any address space layout randomization in gem5
     // therefore the random fields become zero; the smallest gap space was
     // chosen but gap could potentially be much larger.
-    mmap_end = (Addr)0xB7FFF000ULL;
+    memState->mmapEnd = (Addr)0xB7FFF000ULL;
 }
 
 SyscallDesc*
-X86LiveProcess::getDesc(int callnum)
+X86Process::getDesc(int callnum)
 {
     if (callnum < 0 || callnum >= numSyscallDescs)
         return NULL;
@@ -180,11 +193,11 @@ X86LiveProcess::getDesc(int callnum)
 }
 
 void
-X86_64LiveProcess::initState()
+X86_64Process::initState()
 {
-    X86LiveProcess::initState();
+    X86Process::initState();
 
-    argsInit(sizeof(uint64_t), PageBytes);
+    argsInit(PageBytes);
 
        // Set up the vsyscall page for this process.
     allocateMem(vsyscallPage.base, vsyscallPage.size);
@@ -624,11 +637,11 @@ X86_64LiveProcess::initState()
 }
 
 void
-I386LiveProcess::initState()
+I386Process::initState()
 {
-    X86LiveProcess::initState();
+    X86Process::initState();
 
-    argsInit(sizeof(uint32_t), PageBytes);
+    argsInit(PageBytes);
 
     /*
      * Set up a GDT for this process. The whole GDT wouldn't really be for
@@ -744,8 +757,8 @@ I386LiveProcess::initState()
 
 template<class IntType>
 void
-X86LiveProcess::argsInit(int pageSize,
-        std::vector<AuxVector<IntType> > extraAuxvs)
+X86Process::argsInit(int pageSize,
+                     std::vector<AuxVector<IntType> > extraAuxvs)
 {
     int intSize = sizeof(IntType);
 
@@ -942,18 +955,21 @@ X86LiveProcess::argsInit(int pageSize,
         aux_padding +
         frame_size;
 
-    stack_min = stack_base - space_needed;
-    stack_min = roundDown(stack_min, align);
-    stack_size = roundUp(stack_base - stack_min, pageSize);
+    memState->stackMin = memState->stackBase - space_needed;
+    memState->stackMin = roundDown(memState->stackMin, align);
+    memState->stackSize = roundUp(memState->stackBase - memState->stackMin,
+                                  pageSize);
 
     // map memory
-    Addr stack_end = roundDown(stack_base - stack_size, pageSize);
+    Addr stack_end = roundDown(memState->stackBase - memState->stackSize,
+                               pageSize);
 
-    DPRINTF(Stack, "Mapping the stack: 0x%x %dB\n", stack_end, stack_size);
-    allocateMem(stack_end, stack_size);
+    DPRINTF(Stack, "Mapping the stack: 0x%x %dB\n",
+            stack_end, memState->stackSize);
+    allocateMem(stack_end, memState->stackSize);
 
     // map out initial stack contents
-    IntType sentry_base = stack_base - sentry_size;
+    IntType sentry_base = memState->stackBase - sentry_size;
     IntType file_name_base = sentry_base - file_name_size;
     IntType env_data_base = file_name_base - env_data_size;
     IntType arg_data_base = env_data_base - arg_data_size;
@@ -972,7 +988,7 @@ X86LiveProcess::argsInit(int pageSize,
     DPRINTF(Stack, "0x%x - envp array\n", envp_array_base);
     DPRINTF(Stack, "0x%x - argv array\n", argv_array_base);
     DPRINTF(Stack, "0x%x - argc \n", argc_base);
-    DPRINTF(Stack, "0x%x - stack min\n", stack_min);
+    DPRINTF(Stack, "0x%x - stack min\n", memState->stackMin);
 
     // write contents to stack
 
@@ -1019,29 +1035,27 @@ X86LiveProcess::argsInit(int pageSize,
 
     ThreadContext *tc = system->getThreadContext(contextIds[0]);
     //Set the stack pointer register
-    tc->setIntReg(StackPointerReg, stack_min);
+    tc->setIntReg(StackPointerReg, memState->stackMin);
 
     // There doesn't need to be any segment base added in since we're dealing
     // with the flat segmentation model.
     tc->pcState(getStartPC());
 
     //Align the "stack_min" to a page boundary.
-    stack_min = roundDown(stack_min, pageSize);
-
-//    num_processes++;
+    memState->stackMin = roundDown(memState->stackMin, pageSize);
 }
 
 void
-X86_64LiveProcess::argsInit(int intSize, int pageSize)
+X86_64Process::argsInit(int pageSize)
 {
     std::vector<AuxVector<uint64_t> > extraAuxvs;
     extraAuxvs.push_back(AuxVector<uint64_t>(M5_AT_SYSINFO_EHDR,
                 vsyscallPage.base));
-    X86LiveProcess::argsInit<uint64_t>(pageSize, extraAuxvs);
+    X86Process::argsInit<uint64_t>(pageSize, extraAuxvs);
 }
 
 void
-I386LiveProcess::argsInit(int intSize, int pageSize)
+I386Process::argsInit(int pageSize)
 {
     std::vector<AuxVector<uint32_t> > extraAuxvs;
     //Tell the binary where the vsyscall part of the vsyscall page is.
@@ -1049,38 +1063,46 @@ I386LiveProcess::argsInit(int intSize, int pageSize)
                 vsyscallPage.base + vsyscallPage.vsyscallOffset));
     extraAuxvs.push_back(AuxVector<uint32_t>(M5_AT_SYSINFO_EHDR,
                 vsyscallPage.base));
-    X86LiveProcess::argsInit<uint32_t>(pageSize, extraAuxvs);
+    X86Process::argsInit<uint32_t>(pageSize, extraAuxvs);
 }
 
 void
-X86LiveProcess::setSyscallReturn(ThreadContext *tc, SyscallReturn retval)
+X86Process::setSyscallReturn(ThreadContext *tc, SyscallReturn retval)
 {
     tc->setIntReg(INTREG_RAX, retval.encodedValue());
 }
 
 X86ISA::IntReg
-X86_64LiveProcess::getSyscallArg(ThreadContext *tc, int &i)
+X86_64Process::getSyscallArg(ThreadContext *tc, int &i)
 {
     assert(i < NumArgumentRegs);
     return tc->readIntReg(ArgumentReg[i++]);
 }
 
 void
-X86_64LiveProcess::setSyscallArg(ThreadContext *tc, int i, X86ISA::IntReg val)
+X86_64Process::setSyscallArg(ThreadContext *tc, int i, X86ISA::IntReg val)
 {
     assert(i < NumArgumentRegs);
     return tc->setIntReg(ArgumentReg[i], val);
 }
 
+void
+X86_64Process::clone(ThreadContext *old_tc, ThreadContext *new_tc,
+                     Process *p, TheISA::IntReg flags)
+{
+    X86Process::clone(old_tc, new_tc, p, flags);
+    ((X86_64Process*)p)->vsyscallPage = vsyscallPage;
+}
+
 X86ISA::IntReg
-I386LiveProcess::getSyscallArg(ThreadContext *tc, int &i)
+I386Process::getSyscallArg(ThreadContext *tc, int &i)
 {
     assert(i < NumArgumentRegs32);
     return tc->readIntReg(ArgumentReg32[i++]);
 }
 
 X86ISA::IntReg
-I386LiveProcess::getSyscallArg(ThreadContext *tc, int &i, int width)
+I386Process::getSyscallArg(ThreadContext *tc, int &i, int width)
 {
     assert(width == 32 || width == 64);
     assert(i < NumArgumentRegs);
@@ -1091,8 +1113,16 @@ I386LiveProcess::getSyscallArg(ThreadContext *tc, int &i, int width)
 }
 
 void
-I386LiveProcess::setSyscallArg(ThreadContext *tc, int i, X86ISA::IntReg val)
+I386Process::setSyscallArg(ThreadContext *tc, int i, X86ISA::IntReg val)
 {
     assert(i < NumArgumentRegs);
     return tc->setIntReg(ArgumentReg[i], val);
+}
+
+void
+I386Process::clone(ThreadContext *old_tc, ThreadContext *new_tc,
+                   Process *p, TheISA::IntReg flags)
+{
+    X86Process::clone(old_tc, new_tc, p, flags);
+    ((I386Process*)p)->vsyscallPage = vsyscallPage;
 }

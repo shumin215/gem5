@@ -42,40 +42,42 @@
 #include "cpu/thread_context.hh"
 #include "debug/Loader.hh"
 #include "mem/page_table.hh"
+#include "sim/aux_vector.hh"
 #include "sim/process.hh"
 #include "sim/process_impl.hh"
+#include "sim/syscall_return.hh"
 #include "sim/system.hh"
 
 using namespace std;
 using namespace RiscvISA;
 
-RiscvLiveProcess::RiscvLiveProcess(LiveProcessParams * params,
-    ObjectFile *objFile) : LiveProcess(params, objFile)
+RiscvProcess::RiscvProcess(ProcessParams * params,
+    ObjectFile *objFile) : Process(params, objFile)
 {
     // Set up stack. On RISC-V, stack starts at the top of kuseg
     // user address space. RISC-V stack grows down from here
-    stack_base = 0x7FFFFFFF;
+    memState->stackBase = (Addr)0x7FFFFFFF;
 
     // Set pointer for next thread stack.  Reserve 8M for main stack.
-    next_thread_stack_base = stack_base - (8 * 1024 * 1024);
+    memState->nextThreadStackBase = memState->stackBase - (8 * 1024 * 1024);
 
     // Set up break point (Top of Heap)
-    brk_point = objFile->bssBase() + objFile->bssSize();
+    memState->brkPoint = objFile->bssBase() + objFile->bssSize();
 
     // Set up region for mmaps.  Start it 1GB above the top of the heap.
-    mmap_end = brk_point + 0x40000000L;
+    memState->mmapEnd = memState->brkPoint + 0x40000000L;
 }
 
 void
-RiscvLiveProcess::initState()
+RiscvProcess::initState()
 {
-    LiveProcess::initState();
+    Process::initState();
 
     argsInit<uint64_t>(PageBytes);
 }
 
 template<class IntType> void
-RiscvLiveProcess::argsInit(int pageSize)
+RiscvProcess::argsInit(int pageSize)
 {
     updateBias();
 
@@ -122,18 +124,19 @@ RiscvLiveProcess::argsInit(int pageSize)
         env_data_size += env.size() + 1;
     int auxv_array_size = 2 * sizeof(IntType)*auxv.size();
 
-    stack_size = sizeof(IntType) + argv_array_size + 2 * sizeof(Addr) +
-        arg_data_size + 2 * sizeof(Addr);
+    memState->stackSize = sizeof(IntType) + argv_array_size + 2 *
+        sizeof(Addr) + arg_data_size + 2 * sizeof(Addr);
     if (!envp.empty()) {
-        stack_size += 2 * sizeof(Addr) + envp_array_size + 2 * sizeof(Addr) +
-            env_data_size;
+        memState->stackSize += 2 * sizeof(Addr) + envp_array_size + 2 *
+            sizeof(Addr) + env_data_size;
     }
     if (!auxv.empty())
-        stack_size += 2 * sizeof(Addr) + auxv_array_size;
-    stack_min = roundDown(stack_base - stack_size, pageSize);
-    allocateMem(stack_min, roundUp(stack_size, pageSize));
+        memState->stackSize += 2 * sizeof(Addr) + auxv_array_size;
+    memState->stackMin = roundDown(memState->stackBase - memState->stackSize,
+                                   pageSize);
+    allocateMem(memState->stackMin, roundUp(memState->stackSize, pageSize));
 
-    Addr argv_array_base = stack_min + sizeof(IntType);
+    Addr argv_array_base = memState->stackMin + sizeof(IntType);
     Addr arg_data_base = argv_array_base + argv_array_size + 2 * sizeof(Addr);
     Addr envp_array_base = arg_data_base + arg_data_size;
     if (!envp.empty())
@@ -158,7 +161,7 @@ RiscvLiveProcess::argsInit(int pageSize)
         }
     }
 
-    Addr sp = stack_min;
+    Addr sp = memState->stackMin;
     initVirtMem.writeBlob(sp, (uint8_t *)&argc, sizeof(IntType));
     sp += sizeof(IntType);
     for (Addr arg_pointer: arg_pointers) {
@@ -209,24 +212,30 @@ RiscvLiveProcess::argsInit(int pageSize)
     }
 
     ThreadContext *tc = system->getThreadContext(contextIds[0]);
-    tc->setIntReg(StackPointerReg, stack_min);
+    tc->setIntReg(StackPointerReg, memState->stackMin);
     tc->pcState(getStartPC());
 }
 
 RiscvISA::IntReg
-RiscvLiveProcess::getSyscallArg(ThreadContext *tc, int &i)
+RiscvProcess::getSyscallArg(ThreadContext *tc, int &i)
 {
-    return tc->readIntReg(SyscallArgumentRegs[i++]);
+    // RISC-V only has four system call argument registers by convention, so
+    // if a larger index is requested return 0
+    RiscvISA::IntReg retval = 0;
+    if (i < 4)
+        retval = tc->readIntReg(SyscallArgumentRegs[i]);
+    i++;
+    return retval;
 }
 
 void
-RiscvLiveProcess::setSyscallArg(ThreadContext *tc, int i, RiscvISA::IntReg val)
+RiscvProcess::setSyscallArg(ThreadContext *tc, int i, RiscvISA::IntReg val)
 {
     tc->setIntReg(SyscallArgumentRegs[i], val);
 }
 
 void
-RiscvLiveProcess::setSyscallReturn(ThreadContext *tc, SyscallReturn sysret)
+RiscvProcess::setSyscallReturn(ThreadContext *tc, SyscallReturn sysret)
 {
     if (sysret.successful()) {
         // no error

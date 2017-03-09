@@ -30,51 +30,54 @@
  *          Korey Sewell
  */
 
-#include "arch/mips/isa_traits.hh"
 #include "arch/mips/process.hh"
+
+#include "arch/mips/isa_traits.hh"
 #include "base/loader/elf_object.hh"
 #include "base/loader/object_file.hh"
 #include "base/misc.hh"
 #include "cpu/thread_context.hh"
 #include "debug/Loader.hh"
 #include "mem/page_table.hh"
+#include "sim/aux_vector.hh"
 #include "sim/process.hh"
 #include "sim/process_impl.hh"
+#include "sim/syscall_return.hh"
 #include "sim/system.hh"
 
 using namespace std;
 using namespace MipsISA;
 
-MipsLiveProcess::MipsLiveProcess(LiveProcessParams * params,
-        ObjectFile *objFile)
-    : LiveProcess(params, objFile)
+MipsProcess::MipsProcess(ProcessParams * params, ObjectFile *objFile)
+    : Process(params, objFile)
 {
     // Set up stack. On MIPS, stack starts at the top of kuseg
     // user address space. MIPS stack grows down from here
-    stack_base = 0x7FFFFFFF;
+    memState->stackBase = 0x7FFFFFFF;
 
     // Set pointer for next thread stack.  Reserve 8M for main stack.
-    next_thread_stack_base = stack_base - (8 * 1024 * 1024);
+    memState->nextThreadStackBase = memState->stackBase - (8 * 1024 * 1024);
 
     // Set up break point (Top of Heap)
-    brk_point = objFile->dataBase() + objFile->dataSize() + objFile->bssSize();
-    brk_point = roundUp(brk_point, PageBytes);
+    memState->brkPoint = objFile->dataBase() + objFile->dataSize() +
+                         objFile->bssSize();
+    memState->brkPoint = roundUp(memState->brkPoint, PageBytes);
 
     // Set up region for mmaps.  Start it 1GB above the top of the heap.
-    mmap_end = brk_point + 0x40000000L;
+    memState->mmapEnd = memState->brkPoint + 0x40000000L;
 }
 
 void
-MipsLiveProcess::initState()
+MipsProcess::initState()
 {
-    LiveProcess::initState();
+    Process::initState();
 
     argsInit<uint32_t>(PageBytes);
 }
 
 template<class IntType>
 void
-MipsLiveProcess::argsInit(int pageSize)
+MipsProcess::argsInit(int pageSize)
 {
     int intSize = sizeof(IntType);
 
@@ -138,15 +141,15 @@ MipsLiveProcess::argsInit(int pageSize)
         env_data_size;
 
     // set bottom of stack
-    stack_min = stack_base - space_needed;
+    memState->stackMin = memState->stackBase - space_needed;
     // align it
-    stack_min = roundDown(stack_min, pageSize);
-    stack_size = stack_base - stack_min;
+    memState->stackMin = roundDown(memState->stackMin, pageSize);
+    memState->stackSize = memState->stackBase - memState->stackMin;
     // map memory
-    allocateMem(stack_min, roundUp(stack_size, pageSize));
+    allocateMem(memState->stackMin, roundUp(memState->stackSize, pageSize));
 
     // map out initial stack contents
-    IntType argv_array_base = stack_min + intSize; // room for argc
+    IntType argv_array_base = memState->stackMin + intSize; // room for argc
     IntType envp_array_base = argv_array_base + argv_array_size;
     IntType auxv_array_base = envp_array_base + envp_array_size;
     IntType arg_data_base = auxv_array_base + auxv_array_size;
@@ -157,7 +160,7 @@ MipsLiveProcess::argsInit(int pageSize)
 
     argc = htog((IntType)argc);
 
-    initVirtMem.writeBlob(stack_min, (uint8_t*)&argc, intSize);
+    initVirtMem.writeBlob(memState->stackMin, (uint8_t*)&argc, intSize);
 
     copyStringArray(argv, argv_array_base, arg_data_base, initVirtMem);
 
@@ -182,29 +185,28 @@ MipsLiveProcess::argsInit(int pageSize)
 
     setSyscallArg(tc, 0, argc);
     setSyscallArg(tc, 1, argv_array_base);
-    tc->setIntReg(StackPointerReg, stack_min);
+    tc->setIntReg(StackPointerReg, memState->stackMin);
 
     tc->pcState(getStartPC());
 }
 
 
 MipsISA::IntReg
-MipsLiveProcess::getSyscallArg(ThreadContext *tc, int &i)
+MipsProcess::getSyscallArg(ThreadContext *tc, int &i)
 {
     assert(i < 6);
     return tc->readIntReg(FirstArgumentReg + i++);
 }
 
 void
-MipsLiveProcess::setSyscallArg(ThreadContext *tc,
-        int i, MipsISA::IntReg val)
+MipsProcess::setSyscallArg(ThreadContext *tc, int i, MipsISA::IntReg val)
 {
     assert(i < 6);
     tc->setIntReg(FirstArgumentReg + i, val);
 }
 
 void
-MipsLiveProcess::setSyscallReturn(ThreadContext *tc, SyscallReturn sysret)
+MipsProcess::setSyscallReturn(ThreadContext *tc, SyscallReturn sysret)
 {
     if (sysret.successful()) {
         // no error

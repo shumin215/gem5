@@ -77,7 +77,7 @@ def addNoISAOptions(parser):
     parser.add_option("--list-mem-types",
                       action="callback", callback=_listMemTypes,
                       help="List available memory types")
-    parser.add_option("--mem-type", type="choice", default="DDR3_1600_x64",
+    parser.add_option("--mem-type", type="choice", default="DDR3_1600_8x8",
                       choices=MemConfig.mem_names(),
                       help = "type of memory to use")
     parser.add_option("--mem-channels", type="int", default=1,
@@ -85,7 +85,7 @@ def addNoISAOptions(parser):
     parser.add_option("--mem-ranks", type="int", default=None,
                       help = "number of memory ranks per channel")
     parser.add_option("--mem-size", action="store", type="string",
-                      default="8192MB",
+                      default="512MB",
                       help="Specify the physical memory size (single memory)")
 
 
@@ -101,13 +101,13 @@ def addNoISAOptions(parser):
     parser.add_option("--num-dirs", type="int", default=1)
     parser.add_option("--num-l2caches", type="int", default=1)
     parser.add_option("--num-l3caches", type="int", default=1)
-    parser.add_option("--l1d_size", type="string", default="32kB")
+    parser.add_option("--l1d_size", type="string", default="64kB")
     parser.add_option("--l1i_size", type="string", default="32kB")
     parser.add_option("--l2_size", type="string", default="2MB")
     parser.add_option("--l3_size", type="string", default="16MB")
     parser.add_option("--l1d_assoc", type="int", default=2)
     parser.add_option("--l1i_assoc", type="int", default=2)
-    parser.add_option("--l2_assoc", type="int", default=16)
+    parser.add_option("--l2_assoc", type="int", default=8)
     parser.add_option("--l3_assoc", type="int", default=16)
     parser.add_option("--cacheline_size", type="int", default=64)
 
@@ -260,6 +260,9 @@ def addCommonOptions(parser):
     # CPU Switching - default switch model goes from a checkpoint
     # to a timing simple CPU with caches to warm up, then to detailed CPU for
     # data measurement
+    parser.add_option("--bigLITTLE-switch", action="store", type="int",
+        default=None,
+        help="switch between big and LITTLE cores with period <N>")
     parser.add_option("--repeat-switch", action="store", type="int",
         default=None,
         help="switch back and forth between CPUs with period <N>")

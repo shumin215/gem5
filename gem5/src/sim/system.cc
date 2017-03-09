@@ -45,12 +45,18 @@
  *          Rick Strong
  */
 
+#include "sim/system.hh"
+
 #include "arch/remote_gdb.hh"
 #include "arch/utility.hh"
 #include "base/loader/object_file.hh"
 #include "base/loader/symtab.hh"
 #include "base/str.hh"
 #include "base/trace.hh"
+#include "config/use_kvm.hh"
+#if USE_KVM
+#include "cpu/kvm/vm.hh"
+#endif
 #include "cpu/thread_context.hh"
 #include "debug/Loader.hh"
 #include "debug/WorkItems.hh"
@@ -60,7 +66,6 @@
 #include "sim/byteswap.hh"
 #include "sim/debug.hh"
 #include "sim/full_system.hh"
-#include "sim/system.hh"
 
 /**
  * To avoid linking errors with LTO, only include the header if we
@@ -68,6 +73,7 @@
  */
 #if THE_ISA != NULL_ISA
 #include "kern/kernel_stats.hh"
+
 #endif
 
 using namespace std;
@@ -88,7 +94,11 @@ System::System(Params *p)
       kernel(nullptr),
       loadAddrMask(p->load_addr_mask),
       loadAddrOffset(p->load_offset),
-      nextPID(0),
+#if USE_KVM
+      kvmVM(p->kvm_vm),
+#else
+      kvmVM(nullptr),
+#endif
       physmem(name() + ".physmem", p->memories, p->mmap_using_noreserve),
       memoryMode(p->mem_mode),
       _cacheLineSize(p->cache_line_size),
@@ -102,6 +112,12 @@ System::System(Params *p)
 {
     // add self to global system list
     systemList.push_back(this);
+
+#if USE_KVM
+    if (kvmVM) {
+        kvmVM->setSystem(this);
+    }
+#endif
 
     if (FullSystem) {
         kernelSymtab = new SymbolTable;
@@ -158,7 +174,7 @@ System::System(Params *p)
         }
     }
 
-    // increment the number of running systms
+    // increment the number of running systems
     numSystemsRunning++;
 
     // Set back pointers to the system in all memories
@@ -369,7 +385,6 @@ System::serialize(CheckpointOut &cp) const
     if (FullSystem)
         kernelSymtab->serialize("kernel_symtab", cp);
     SERIALIZE_SCALAR(pagePtr);
-    SERIALIZE_SCALAR(nextPID);
     serializeSymtab(cp);
 
     // also serialize the memories in the system
@@ -383,7 +398,6 @@ System::unserialize(CheckpointIn &cp)
     if (FullSystem)
         kernelSymtab->unserialize("kernel_symtab", cp);
     UNSERIALIZE_SCALAR(pagePtr);
-    UNSERIALIZE_SCALAR(nextPID);
     unserializeSymtab(cp);
 
     // also unserialize the memories in the system

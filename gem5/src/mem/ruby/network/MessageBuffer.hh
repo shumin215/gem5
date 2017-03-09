@@ -41,6 +41,7 @@
 #include <string>
 #include <vector>
 
+#include "base/trace.hh"
 #include "debug/RubyQueue.hh"
 #include "mem/ruby/common/Address.hh"
 #include "mem/ruby/common/Consumer.hh"
@@ -100,7 +101,10 @@ class MessageBuffer : public SimObject
 
     //! Updates the delay cycles of the message at the head of the queue,
     //! removes it from the queue and returns its total delay.
-    Tick dequeue(Tick current_time);
+    Tick dequeue(Tick current_time, bool decrement_messages = true);
+
+    void registerDequeueCallback(std::function<void()> callback);
+    void unregisterDequeueCallback();
 
     void recycle(Tick current_time, Tick recycle_latency);
     bool isEmpty() const { return m_prio_heap.size() == 0; }
@@ -132,6 +136,8 @@ class MessageBuffer : public SimObject
     //! Consumer to signal a wakeup(), can be NULL
     Consumer* m_consumer;
     std::vector<MsgPtr> m_prio_heap;
+
+    std::function<void()> m_dequeue_callback;
 
     // use a std::map for the stalled messages as this container is
     // sorted and ensures a well-defined iteration order
@@ -189,6 +195,11 @@ class MessageBuffer : public SimObject
 
     int m_input_link_id;
     int m_vnet_id;
+
+    Stats::Average m_buf_msgs;
+    Stats::Average m_stall_time;
+    Stats::Scalar m_stall_count;
+    Stats::Formula m_occupancy;
 };
 
 Tick random_time();

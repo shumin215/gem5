@@ -42,8 +42,10 @@
  *          Andreas Hansson
  */
 
-#include "base/random.hh"
 #include "mem/simple_mem.hh"
+
+#include "base/random.hh"
+#include "base/trace.hh"
 #include "debug/Drain.hh"
 
 using namespace std;

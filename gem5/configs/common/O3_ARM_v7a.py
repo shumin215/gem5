@@ -97,7 +97,7 @@ class O3_ARM_v7a_BP(BiModeBP):
     globalCtrBits = 2
     choicePredictorSize = 8192
     choiceCtrBits = 2
-    BTBEntries = 4096
+    BTBEntries = 2048
     BTBTagSize = 18
     RASSize = 16
     instShiftAmt = 2
@@ -126,7 +126,7 @@ class O3_ARM_v7a_3(DerivO3CPU):
     renameWidth = 3
     renameToIEWDelay = 1
     issueToExecuteDelay = 1
-    dispatchWidth = 3
+    dispatchWidth = 6
     issueWidth = 8
     wbWidth = 8
     fuPool = O3_ARM_v7a_FUP()
@@ -152,8 +152,8 @@ class O3_ARM_v7a_ICache(Cache):
     response_latency = 1
     mshrs = 2
     tgts_per_mshr = 8
-    size = '48kB'
-    assoc = 4
+    size = '32kB'
+    assoc = 2
     is_read_only = True
     # Writeback clean lines as well
     writeback_clean = True
@@ -193,7 +193,7 @@ class O3_ARM_v7aL2(Cache):
     response_latency = 12
     mshrs = 16
     tgts_per_mshr = 8
-    size = '2MB'
+    size = '1MB'
     assoc = 16
     write_buffers = 8
     prefetch_on_access = True

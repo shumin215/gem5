@@ -41,13 +41,14 @@
  * Authors: Steve Reinhardt
  */
 
+#include "cpu/simple/atomic.hh"
+
 #include "arch/locked_mem.hh"
 #include "arch/mmapped_ipr.hh"
 #include "arch/utility.hh"
 #include "base/bigint.hh"
 #include "base/output.hh"
 #include "config/the_isa.hh"
-#include "cpu/simple/atomic.hh"
 #include "cpu/exetrace.hh"
 #include "debug/Drain.hh"
 #include "debug/ExecFaulting.hh"
@@ -57,8 +58,8 @@
 #include "mem/physical.hh"
 #include "params/AtomicSimpleCPU.hh"
 #include "sim/faults.hh"
-#include "sim/system.hh"
 #include "sim/full_system.hh"
+#include "sim/system.hh"
 
 using namespace std;
 using namespace TheISA;
@@ -627,6 +628,7 @@ AtomicSimpleCPU::tick()
 
             preExecute();
 
+            Tick stall_ticks = 0;
             if (curStaticInst) {
                 fault = curStaticInst->execute(&t_info, traceData);
 
@@ -640,6 +642,13 @@ AtomicSimpleCPU::tick()
                     traceData = NULL;
                 }
 
+                if (dynamic_pointer_cast<SyscallRetryFault>(fault)) {
+                    // Retry execution of system calls after a delay.
+                    // Prevents immediate re-execution since conditions which
+                    // caused the retry are unlikely to change every tick.
+                    stall_ticks += clockEdge(syscallRetryLatency) - curTick();
+                }
+
                 postExecute();
             }
 
@@ -648,7 +657,6 @@ AtomicSimpleCPU::tick()
                         curStaticInst->isFirstMicroop()))
                 instCnt++;
 
-            Tick stall_ticks = 0;
             if (simulate_inst_stalls && icache_access)
                 stall_ticks += icache_latency;
 

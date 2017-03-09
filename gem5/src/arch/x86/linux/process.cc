@@ -37,14 +37,16 @@
  * Authors: Gabe Black
  */
 
-#include "arch/x86/linux/linux.hh"
 #include "arch/x86/linux/process.hh"
+
 #include "arch/x86/isa_traits.hh"
+#include "arch/x86/linux/linux.hh"
 #include "arch/x86/registers.hh"
 #include "base/trace.hh"
 #include "cpu/thread_context.hh"
 #include "kern/linux/linux.hh"
 #include "sim/process.hh"
+#include "sim/syscall_desc.hh"
 #include "sim/syscall_emul.hh"
 
 using namespace std;
@@ -52,7 +54,7 @@ using namespace X86ISA;
 
 /// Target uname() handler.
 static SyscallReturn
-unameFunc(SyscallDesc *desc, int callnum, LiveProcess *process,
+unameFunc(SyscallDesc *desc, int callnum, Process *process,
           ThreadContext *tc)
 {
     int index = 0;
@@ -70,7 +72,7 @@ unameFunc(SyscallDesc *desc, int callnum, LiveProcess *process,
 }
 
 static SyscallReturn
-archPrctlFunc(SyscallDesc *desc, int callnum, LiveProcess *process,
+archPrctlFunc(SyscallDesc *desc, int callnum, Process *process,
               ThreadContext *tc)
 {
     enum ArchPrctlCodes
@@ -137,28 +139,28 @@ struct UserDesc64 {
 
 static SyscallReturn
 setThreadArea32Func(SyscallDesc *desc, int callnum,
-        LiveProcess *process, ThreadContext *tc)
+                    Process *process, ThreadContext *tc)
 {
     const int minTLSEntry = 6;
     const int numTLSEntries = 3;
     const int maxTLSEntry = minTLSEntry + numTLSEntries - 1;
 
-    X86LiveProcess *x86lp = dynamic_cast<X86LiveProcess *>(process);
-    assert(x86lp);
+    X86Process *x86p = dynamic_cast<X86Process *>(process);
+    assert(x86p);
 
-    assert((maxTLSEntry + 1) * sizeof(uint64_t) <= x86lp->gdtSize());
+    assert((maxTLSEntry + 1) * sizeof(uint64_t) <= x86p->gdtSize());
 
     int argIndex = 0;
     TypedBufferArg<UserDesc32> userDesc(process->getSyscallArg(tc, argIndex));
     TypedBufferArg<uint64_t>
-        gdt(x86lp->gdtStart() + minTLSEntry * sizeof(uint64_t),
-                numTLSEntries * sizeof(uint64_t));
+        gdt(x86p->gdtStart() + minTLSEntry * sizeof(uint64_t),
+            numTLSEntries * sizeof(uint64_t));
 
     if (!userDesc.copyIn(tc->getMemProxy()))
         return -EFAULT;
 
     if (!gdt.copyIn(tc->getMemProxy()))
-        panic("Failed to copy in GDT for %s.\n", desc->name);
+        panic("Failed to copy in GDT for %s.\n", desc->name());
 
     if (userDesc->entry_number == (uint32_t)(-1)) {
         // Find a free TLS entry.
@@ -212,7 +214,7 @@ setThreadArea32Func(SyscallDesc *desc, int callnum,
     if (!userDesc.copyOut(tc->getMemProxy()))
         return -EFAULT;
     if (!gdt.copyOut(tc->getMemProxy()))
-        panic("Failed to copy out GDT for %s.\n", desc->name);
+        panic("Failed to copy out GDT for %s.\n", desc->name());
 
     return 0;
 }
@@ -274,10 +276,10 @@ static SyscallDesc syscallDescs64[] = {
     /*  53 */ SyscallDesc("socketpair", unimplementedFunc),
     /*  54 */ SyscallDesc("setsockopt", unimplementedFunc),
     /*  55 */ SyscallDesc("getsockopt", unimplementedFunc),
-    /*  56 */ SyscallDesc("clone", cloneFunc),
+    /*  56 */ SyscallDesc("clone", cloneFunc<X86Linux64>),
     /*  57 */ SyscallDesc("fork", unimplementedFunc),
     /*  58 */ SyscallDesc("vfork", unimplementedFunc),
-    /*  59 */ SyscallDesc("execve", unimplementedFunc),
+    /*  59 */ SyscallDesc("execve", execveFunc<X86Linux64>),
     /*  60 */ SyscallDesc("exit", exitFunc),
     /*  61 */ SyscallDesc("wait4", unimplementedFunc),
     /*  62 */ SyscallDesc("kill", unimplementedFunc),
@@ -327,7 +329,7 @@ static SyscallDesc syscallDescs64[] = {
     /* 106 */ SyscallDesc("setgid", unimplementedFunc),
     /* 107 */ SyscallDesc("geteuid", geteuidFunc),
     /* 108 */ SyscallDesc("getegid", getegidFunc),
-    /* 109 */ SyscallDesc("setpgid", unimplementedFunc),
+    /* 109 */ SyscallDesc("setpgid", setpgidFunc),
     /* 110 */ SyscallDesc("getppid", getppidFunc),
     /* 111 */ SyscallDesc("getpgrp", unimplementedFunc),
     /* 112 */ SyscallDesc("setsid", unimplementedFunc),
@@ -404,7 +406,7 @@ static SyscallDesc syscallDescs64[] = {
     /* 183 */ SyscallDesc("afs_syscall", unimplementedFunc),
     /* 184 */ SyscallDesc("tuxcall", unimplementedFunc),
     /* 185 */ SyscallDesc("security", unimplementedFunc),
-    /* 186 */ SyscallDesc("gettid", unimplementedFunc),
+    /* 186 */ SyscallDesc("gettid", gettidFunc),
     /* 187 */ SyscallDesc("readahead", unimplementedFunc),
     /* 188 */ SyscallDesc("setxattr", unimplementedFunc),
     /* 189 */ SyscallDesc("lsetxattr", unimplementedFunc),
@@ -436,7 +438,7 @@ static SyscallDesc syscallDescs64[] = {
     /* 215 */ SyscallDesc("epoll_wait_old", unimplementedFunc),
     /* 216 */ SyscallDesc("remap_file_pages", unimplementedFunc),
     /* 217 */ SyscallDesc("getdents64", unimplementedFunc),
-    /* 218 */ SyscallDesc("set_tid_address", unimplementedFunc),
+    /* 218 */ SyscallDesc("set_tid_address", setTidAddressFunc),
     /* 219 */ SyscallDesc("restart_syscall", unimplementedFunc),
     /* 220 */ SyscallDesc("semtimedop", unimplementedFunc),
     /* 221 */ SyscallDesc("fadvise64", unimplementedFunc),
@@ -534,11 +536,17 @@ static SyscallDesc syscallDescs64[] = {
     /* 313 */ SyscallDesc("finit_module", unimplementedFunc),
 };
 
-X86_64LinuxProcess::X86_64LinuxProcess(LiveProcessParams * params,
-        ObjectFile *objFile)
-    : X86_64LiveProcess(params, objFile, syscallDescs64,
-                        sizeof(syscallDescs64) / sizeof(SyscallDesc))
+X86_64LinuxProcess::X86_64LinuxProcess(ProcessParams * params,
+                                       ObjectFile *objFile)
+    : X86_64Process(params, objFile, syscallDescs64,
+                    sizeof(syscallDescs64) / sizeof(SyscallDesc))
 {}
+
+void X86_64LinuxProcess::clone(ThreadContext *old_tc, ThreadContext *new_tc,
+                               Process *process, TheISA::IntReg flags)
+{
+    X86_64Process::clone(old_tc, new_tc, (X86_64Process*)process, flags);
+}
 
 static SyscallDesc syscallDescs32[] = {
     /*   0 */ SyscallDesc("restart_syscall", unimplementedFunc),
@@ -552,7 +560,7 @@ static SyscallDesc syscallDescs32[] = {
     /*   8 */ SyscallDesc("creat", unimplementedFunc),
     /*   9 */ SyscallDesc("link", unimplementedFunc),
     /*  10 */ SyscallDesc("unlink", unimplementedFunc),
-    /*  11 */ SyscallDesc("execve", unimplementedFunc),
+    /*  11 */ SyscallDesc("execve", execveFunc<X86Linux32>),
     /*  12 */ SyscallDesc("chdir", unimplementedFunc),
     /*  13 */ SyscallDesc("time", timeFunc<X86Linux32>),
     /*  14 */ SyscallDesc("mknod", unimplementedFunc),
@@ -561,7 +569,7 @@ static SyscallDesc syscallDescs32[] = {
     /*  17 */ SyscallDesc("break", unimplementedFunc),
     /*  18 */ SyscallDesc("oldstat", unimplementedFunc),
     /*  19 */ SyscallDesc("lseek", unimplementedFunc),
-    /*  20 */ SyscallDesc("getpid", unimplementedFunc),
+    /*  20 */ SyscallDesc("getpid", getpidFunc),
     /*  21 */ SyscallDesc("mount", unimplementedFunc),
     /*  22 */ SyscallDesc("umount", unimplementedFunc),
     /*  23 */ SyscallDesc("setuid", unimplementedFunc),
@@ -596,9 +604,9 @@ static SyscallDesc syscallDescs32[] = {
     /*  52 */ SyscallDesc("umount2", unimplementedFunc),
     /*  53 */ SyscallDesc("lock", unimplementedFunc),
     /*  54 */ SyscallDesc("ioctl", ioctlFunc<X86Linux32>),
-    /*  55 */ SyscallDesc("fcntl", unimplementedFunc),
+    /*  55 */ SyscallDesc("fcntl", fcntlFunc),
     /*  56 */ SyscallDesc("mpx", unimplementedFunc),
-    /*  57 */ SyscallDesc("setpgid", unimplementedFunc),
+    /*  57 */ SyscallDesc("setpgid", setpgidFunc),
     /*  58 */ SyscallDesc("ulimit", unimplementedFunc),
     /*  59 */ SyscallDesc("oldolduname", unimplementedFunc),
     /*  60 */ SyscallDesc("umask", unimplementedFunc),
@@ -661,7 +669,7 @@ static SyscallDesc syscallDescs32[] = {
     /* 117 */ SyscallDesc("ipc", unimplementedFunc),
     /* 118 */ SyscallDesc("fsync", unimplementedFunc),
     /* 119 */ SyscallDesc("sigreturn", unimplementedFunc),
-    /* 120 */ SyscallDesc("clone", unimplementedFunc),
+    /* 120 */ SyscallDesc("clone", cloneFunc<X86Linux32>),
     /* 121 */ SyscallDesc("setdomainname", unimplementedFunc),
     /* 122 */ SyscallDesc("uname", unameFunc),
     /* 123 */ SyscallDesc("modify_ldt", unimplementedFunc),
@@ -765,7 +773,7 @@ static SyscallDesc syscallDescs32[] = {
     /* 221 */ SyscallDesc("getdents64", unimplementedFunc),
     /* 222 */ SyscallDesc("fcntl64", unimplementedFunc),
     /* 223 */ SyscallDesc("unused", unimplementedFunc),
-    /* 224 */ SyscallDesc("gettid", unimplementedFunc),
+    /* 224 */ SyscallDesc("gettid", gettidFunc),
     /* 225 */ SyscallDesc("readahead", unimplementedFunc),
     /* 226 */ SyscallDesc("setxattr", unimplementedFunc),
     /* 227 */ SyscallDesc("lsetxattr", unimplementedFunc),
@@ -799,7 +807,7 @@ static SyscallDesc syscallDescs32[] = {
     /* 255 */ SyscallDesc("epoll_ctl", unimplementedFunc),
     /* 256 */ SyscallDesc("epoll_wait", unimplementedFunc),
     /* 257 */ SyscallDesc("remap_file_pages", unimplementedFunc),
-    /* 258 */ SyscallDesc("set_tid_address", unimplementedFunc),
+    /* 258 */ SyscallDesc("set_tid_address", setTidAddressFunc),
     /* 259 */ SyscallDesc("timer_create", unimplementedFunc),
     /* 260 */ SyscallDesc("timer_settime", unimplementedFunc),
     /* 261 */ SyscallDesc("timer_gettime", unimplementedFunc),
@@ -867,8 +875,13 @@ static SyscallDesc syscallDescs32[] = {
     /* 323 */ SyscallDesc("eventfd", unimplementedFunc)
 };
 
-I386LinuxProcess::I386LinuxProcess(LiveProcessParams * params,
-        ObjectFile *objFile)
-    : I386LiveProcess(params, objFile, syscallDescs32,
-                      sizeof(syscallDescs32) / sizeof(SyscallDesc))
+I386LinuxProcess::I386LinuxProcess(ProcessParams * params, ObjectFile *objFile)
+    : I386Process(params, objFile, syscallDescs32,
+                  sizeof(syscallDescs32) / sizeof(SyscallDesc))
 {}
+
+void I386LinuxProcess::clone(ThreadContext *old_tc, ThreadContext *new_tc,
+                             Process *process, TheISA::IntReg flags)
+{
+    I386Process::clone(old_tc, new_tc, (I386Process*)process, flags);
+}

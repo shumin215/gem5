@@ -305,8 +305,7 @@ Cache::access(PacketPtr pkt, CacheBlk *&blk, Cycles &lat,
                 writebacks.push_back(writebackBlk(old_blk));
             else
                 writebacks.push_back(cleanEvictBlk(old_blk));
-            tags->invalidate(old_blk);
-            old_blk->invalidate();
+            invalidateBlock(old_blk);
         }
 
         blk = nullptr;
@@ -315,11 +314,9 @@ Cache::access(PacketPtr pkt, CacheBlk *&blk, Cycles &lat,
         return false;
     }
 
-    ContextID id = pkt->req->hasContextId() ?
-        pkt->req->contextId() : InvalidContextID;
     // Here lat is the value passed as parameter to accessBlock() function
     // that can modify its value.
-    blk = tags->accessBlock(pkt->getAddr(), pkt->isSecure(), lat, id);
+    blk = tags->accessBlock(pkt->getAddr(), pkt->isSecure(), lat);
 
     DPRINTF(Cache, "%s %s\n", pkt->print(),
             blk ? "hit " + blk->print() : "miss");
@@ -585,7 +582,7 @@ Cache::promoteWholeLineWrites(PacketPtr pkt)
 bool
 Cache::recvTimingReq(PacketPtr pkt)
 {
-    DPRINTF(CacheTags, "%s tags: %s\n", __func__, tags->print());
+    DPRINTF(CacheTags, "%s tags:\n%s\n", __func__, tags->print());
 
     assert(pkt->isRequest());
 
@@ -740,7 +737,7 @@ Cache::recvTimingReq(PacketPtr pkt)
     } else {
         // miss
 
-        Addr blk_addr = blockAlign(pkt->getAddr());
+        Addr blk_addr = pkt->getBlockAddr(blkSize);
 
         // ignore any existing MSHR if we are dealing with an
         // uncacheable request
@@ -964,7 +961,7 @@ Cache::createMissPacket(PacketPtr cpu_pkt, CacheBlk *blk,
     }
 
     // the packet should be block aligned
-    assert(pkt->getAddr() == blockAlign(pkt->getAddr()));
+    assert(pkt->getAddr() == pkt->getBlockAddr(blkSize));
 
     pkt->allocate();
     DPRINTF(Cache, "%s: created %s from %s\n", __func__, pkt->print(),
@@ -1127,7 +1124,7 @@ Cache::recvAtomic(PacketPtr pkt)
 
         tempBlockWriteback = (blk->isDirty() || writebackClean) ?
             writebackBlk(blk) : cleanEvictBlk(blk);
-        blk->invalidate();
+        invalidateBlock(blk);
     }
 
     if (pkt->needsResponse()) {
@@ -1152,7 +1149,7 @@ Cache::functionalAccess(PacketPtr pkt, bool fromCpuSide)
         return;
     }
 
-    Addr blk_addr = blockAlign(pkt->getAddr());
+    Addr blk_addr = pkt->getBlockAddr(blkSize);
     bool is_secure = pkt->isSecure();
     CacheBlk *blk = tags->findBlock(pkt->getAddr(), is_secure);
     MSHR *mshr = mshrQueue.findMatch(blk_addr, is_secure);
@@ -1531,7 +1528,7 @@ Cache::recvTimingResp(PacketPtr pkt)
             else
                 allocateWriteBuffer(wcPkt, forward_time);
         }
-        blk->invalidate();
+        invalidateBlock(blk);
     }
 
     DPRINTF(CacheVerbose, "%s: Leaving with %s\n", __func__, pkt->print());
@@ -1636,6 +1633,9 @@ Cache::writebackVisitor(CacheBlk &blk)
         Request request(tags->regenerateBlkAddr(blk.tag, blk.set),
                         blkSize, 0, Request::funcMasterId);
         request.taskId(blk.task_id);
+        if (blk.isSecure()) {
+            request.setFlags(Request::SECURE);
+        }
 
         Packet packet(&request, MemCmd::WriteReq);
         packet.dataStatic(blk.data);
@@ -1657,8 +1657,7 @@ Cache::invalidateVisitor(CacheBlk &blk)
 
     if (blk.isValid()) {
         assert(!blk.isDirty());
-        tags->invalidate(&blk);
-        blk.invalidate();
+        invalidateBlock(&blk);
     }
 
     return true;
@@ -1732,7 +1731,7 @@ Cache::handleFill(PacketPtr pkt, CacheBlk *blk, PacketList &writebacks,
 #endif
 
     // When handling a fill, we should have no writes to this line.
-    assert(addr == blockAlign(addr));
+    assert(addr == pkt->getBlockAddr(blkSize));
     assert(!writeBuffer.findMatch(addr, is_secure));
 
     if (blk == nullptr) {
@@ -2093,7 +2092,7 @@ Cache::recvTimingSnoopReq(PacketPtr pkt)
     bool is_secure = pkt->isSecure();
     CacheBlk *blk = tags->findBlock(pkt->getAddr(), is_secure);
 
-    Addr blk_addr = blockAlign(pkt->getAddr());
+    Addr blk_addr = pkt->getBlockAddr(blkSize);
     MSHR *mshr = mshrQueue.findMatch(blk_addr, is_secure);
 
     // Update the latency cost of the snoop so that the crossbar can
@@ -2282,7 +2281,7 @@ Cache::getNextQueueEntry()
         // If we have a miss queue slot, we can try a prefetch
         PacketPtr pkt = prefetcher->getPacket();
         if (pkt) {
-            Addr pf_addr = blockAlign(pkt->getAddr());
+            Addr pf_addr = pkt->getBlockAddr(blkSize);
             if (!tags->findBlock(pf_addr, pkt->isSecure()) &&
                 !mshrQueue.findMatch(pf_addr, pkt->isSecure()) &&
                 !writeBuffer.findMatch(pf_addr, pkt->isSecure())) {

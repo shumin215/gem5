@@ -30,8 +30,9 @@
  *          Timothy M. Jones
  */
 
-#include "arch/power/isa_traits.hh"
 #include "arch/power/process.hh"
+
+#include "arch/power/isa_traits.hh"
 #include "arch/power/types.hh"
 #include "base/loader/elf_object.hh"
 #include "base/loader/object_file.hh"
@@ -39,31 +40,33 @@
 #include "cpu/thread_context.hh"
 #include "debug/Stack.hh"
 #include "mem/page_table.hh"
+#include "sim/aux_vector.hh"
 #include "sim/process_impl.hh"
+#include "sim/syscall_return.hh"
 #include "sim/system.hh"
 
 using namespace std;
 using namespace PowerISA;
 
-PowerLiveProcess::PowerLiveProcess(LiveProcessParams *params,
-        ObjectFile *objFile)
-    : LiveProcess(params, objFile)
+PowerProcess::PowerProcess(ProcessParams *params, ObjectFile *objFile)
+    : Process(params, objFile)
 {
-    stack_base = 0xbf000000L;
+    memState->stackBase = 0xbf000000L;
 
     // Set pointer for next thread stack.  Reserve 8M for main stack.
-    next_thread_stack_base = stack_base - (8 * 1024 * 1024);
+    memState->nextThreadStackBase = memState->stackBase - (8 * 1024 * 1024);
 
     // Set up break point (Top of Heap)
-    brk_point = objFile->dataBase() + objFile->dataSize() + objFile->bssSize();
-    brk_point = roundUp(brk_point, PageBytes);
+    memState->brkPoint = objFile->dataBase() + objFile->dataSize() +
+                         objFile->bssSize();
+    memState->brkPoint = roundUp(memState->brkPoint, PageBytes);
 
     // Set up region for mmaps. For now, start at bottom of kuseg space.
-    mmap_end = 0x70000000L;
+    memState->mmapEnd = 0x70000000L;
 }
 
 void
-PowerLiveProcess::initState()
+PowerProcess::initState()
 {
     Process::initState();
 
@@ -71,7 +74,7 @@ PowerLiveProcess::initState()
 }
 
 void
-PowerLiveProcess::argsInit(int intSize, int pageSize)
+PowerProcess::argsInit(int intSize, int pageSize)
 {
     typedef AuxVector<uint32_t> auxv_t;
     std::vector<auxv_t> auxv;
@@ -183,15 +186,16 @@ PowerLiveProcess::argsInit(int intSize, int pageSize)
 
     int space_needed = frame_size + aux_padding;
 
-    stack_min = stack_base - space_needed;
-    stack_min = roundDown(stack_min, align);
-    stack_size = stack_base - stack_min;
+    memState->stackMin = memState->stackBase - space_needed;
+    memState->stackMin = roundDown(memState->stackMin, align);
+    memState->stackSize = memState->stackBase - memState->stackMin;
 
     // map memory
-    allocateMem(roundDown(stack_min, pageSize), roundUp(stack_size, pageSize));
+    allocateMem(roundDown(memState->stackMin, pageSize),
+                roundUp(memState->stackSize, pageSize));
 
     // map out initial stack contents
-    uint32_t sentry_base = stack_base - sentry_size;
+    uint32_t sentry_base = memState->stackBase - sentry_size;
     uint32_t aux_data_base = sentry_base - aux_data_size;
     uint32_t env_data_base = aux_data_base - env_data_size;
     uint32_t arg_data_base = env_data_base - arg_data_size;
@@ -210,7 +214,7 @@ PowerLiveProcess::argsInit(int intSize, int pageSize)
     DPRINTF(Stack, "0x%x - envp array\n", envp_array_base);
     DPRINTF(Stack, "0x%x - argv array\n", argv_array_base);
     DPRINTF(Stack, "0x%x - argc \n", argc_base);
-    DPRINTF(Stack, "0x%x - stack min\n", stack_min);
+    DPRINTF(Stack, "0x%x - stack min\n", memState->stackMin);
 
     // write contents to stack
 
@@ -255,31 +259,30 @@ PowerLiveProcess::argsInit(int intSize, int pageSize)
     ThreadContext *tc = system->getThreadContext(contextIds[0]);
 
     //Set the stack pointer register
-    tc->setIntReg(StackPointerReg, stack_min);
+    tc->setIntReg(StackPointerReg, memState->stackMin);
 
     tc->pcState(getStartPC());
 
     //Align the "stack_min" to a page boundary.
-    stack_min = roundDown(stack_min, pageSize);
+    memState->stackMin = roundDown(memState->stackMin, pageSize);
 }
 
 PowerISA::IntReg
-PowerLiveProcess::getSyscallArg(ThreadContext *tc, int &i)
+PowerProcess::getSyscallArg(ThreadContext *tc, int &i)
 {
     assert(i < 5);
     return tc->readIntReg(ArgumentReg0 + i++);
 }
 
 void
-PowerLiveProcess::setSyscallArg(ThreadContext *tc,
-        int i, PowerISA::IntReg val)
+PowerProcess::setSyscallArg(ThreadContext *tc, int i, PowerISA::IntReg val)
 {
     assert(i < 5);
     tc->setIntReg(ArgumentReg0 + i, val);
 }
 
 void
-PowerLiveProcess::setSyscallReturn(ThreadContext *tc, SyscallReturn sysret)
+PowerProcess::setSyscallReturn(ThreadContext *tc, SyscallReturn sysret)
 {
     Cr cr = tc->readIntReg(INTREG_CR);
     if (sysret.successful()) {

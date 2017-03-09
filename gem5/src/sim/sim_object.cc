@@ -30,18 +30,13 @@
  *          Nathan Binkert
  */
 
-#include <cassert>
+#include "sim/sim_object.hh"
 
-#include "base/callback.hh"
-#include "base/inifile.hh"
 #include "base/match.hh"
 #include "base/misc.hh"
 #include "base/trace.hh"
-#include "base/types.hh"
 #include "debug/Checkpoint.hh"
 #include "sim/probe/probe.hh"
-#include "sim/sim_object.hh"
-#include "sim/stats.hh"
 
 using namespace std;
 

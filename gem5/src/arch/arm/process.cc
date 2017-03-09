@@ -41,8 +41,9 @@
  *          Ali Saidi
  */
 
-#include "arch/arm/isa_traits.hh"
 #include "arch/arm/process.hh"
+
+#include "arch/arm/isa_traits.hh"
 #include "arch/arm/types.hh"
 #include "base/loader/elf_object.hh"
 #include "base/loader/object_file.hh"
@@ -50,57 +51,61 @@
 #include "cpu/thread_context.hh"
 #include "debug/Stack.hh"
 #include "mem/page_table.hh"
+#include "sim/aux_vector.hh"
 #include "sim/byteswap.hh"
 #include "sim/process_impl.hh"
+#include "sim/syscall_return.hh"
 #include "sim/system.hh"
 
 using namespace std;
 using namespace ArmISA;
 
-ArmLiveProcess::ArmLiveProcess(LiveProcessParams *params, ObjectFile *objFile,
-                               ObjectFile::Arch _arch)
-    : LiveProcess(params, objFile), arch(_arch)
+ArmProcess::ArmProcess(ProcessParams *params, ObjectFile *objFile,
+                       ObjectFile::Arch _arch)
+    : Process(params, objFile), arch(_arch)
 {
 }
 
-ArmLiveProcess32::ArmLiveProcess32(LiveProcessParams *params,
-                                   ObjectFile *objFile, ObjectFile::Arch _arch)
-    : ArmLiveProcess(params, objFile, _arch)
+ArmProcess32::ArmProcess32(ProcessParams *params, ObjectFile *objFile,
+                           ObjectFile::Arch _arch)
+    : ArmProcess(params, objFile, _arch)
 {
-    stack_base = 0xbf000000L;
+    memState->stackBase = 0xbf000000L;
 
     // Set pointer for next thread stack.  Reserve 8M for main stack.
-    next_thread_stack_base = stack_base - (8 * 1024 * 1024);
+    memState->nextThreadStackBase = memState->stackBase - (8 * 1024 * 1024);
 
     // Set up break point (Top of Heap)
-    brk_point = objFile->dataBase() + objFile->dataSize() + objFile->bssSize();
-    brk_point = roundUp(brk_point, PageBytes);
+    memState->brkPoint = objFile->dataBase() + objFile->dataSize() +
+                         objFile->bssSize();
+    memState->brkPoint = roundUp(memState->brkPoint, PageBytes);
 
     // Set up region for mmaps. For now, start at bottom of kuseg space.
-    mmap_end = 0x40000000L;
+    memState->mmapEnd = 0x40000000L;
 }
 
-ArmLiveProcess64::ArmLiveProcess64(LiveProcessParams *params,
-                                   ObjectFile *objFile, ObjectFile::Arch _arch)
-    : ArmLiveProcess(params, objFile, _arch)
+ArmProcess64::ArmProcess64(ProcessParams *params, ObjectFile *objFile,
+                           ObjectFile::Arch _arch)
+    : ArmProcess(params, objFile, _arch)
 {
-    stack_base = 0x7fffff0000L;
+    memState->stackBase = 0x7fffff0000L;
 
     // Set pointer for next thread stack.  Reserve 8M for main stack.
-    next_thread_stack_base = stack_base - (8 * 1024 * 1024);
+    memState->nextThreadStackBase = memState->stackBase - (8 * 1024 * 1024);
 
     // Set up break point (Top of Heap)
-    brk_point = objFile->dataBase() + objFile->dataSize() + objFile->bssSize();
-    brk_point = roundUp(brk_point, PageBytes);
+    memState->brkPoint = objFile->dataBase() + objFile->dataSize() +
+                         objFile->bssSize();
+    memState->brkPoint = roundUp(memState->brkPoint, PageBytes);
 
     // Set up region for mmaps. For now, start at bottom of kuseg space.
-    mmap_end = 0x4000000000L;
+    memState->mmapEnd = 0x4000000000L;
 }
 
 void
-ArmLiveProcess32::initState()
+ArmProcess32::initState()
 {
-    LiveProcess::initState();
+    Process::initState();
     argsInit<uint32_t>(PageBytes, INTREG_SP);
     for (int i = 0; i < contextIds.size(); i++) {
         ThreadContext * tc = system->getThreadContext(contextIds[i]);
@@ -117,9 +122,9 @@ ArmLiveProcess32::initState()
 }
 
 void
-ArmLiveProcess64::initState()
+ArmProcess64::initState()
 {
-    LiveProcess::initState();
+    Process::initState();
     argsInit<uint64_t>(PageBytes, INTREG_SP0);
     for (int i = 0; i < contextIds.size(); i++) {
         ThreadContext * tc = system->getThreadContext(contextIds[i]);
@@ -140,7 +145,7 @@ ArmLiveProcess64::initState()
 
 template <class IntType>
 void
-ArmLiveProcess::argsInit(int pageSize, IntRegIndex spIndex)
+ArmProcess::argsInit(int pageSize, IntRegIndex spIndex)
 {
     int intSize = sizeof(IntType);
 
@@ -297,15 +302,16 @@ ArmLiveProcess::argsInit(int pageSize, IntRegIndex spIndex)
 
     int space_needed = frame_size + aux_padding;
 
-    stack_min = stack_base - space_needed;
-    stack_min = roundDown(stack_min, align);
-    stack_size = stack_base - stack_min;
+    memState->stackMin = memState->stackBase - space_needed;
+    memState->stackMin = roundDown(memState->stackMin, align);
+    memState->stackSize = memState->stackBase - memState->stackMin;
 
     // map memory
-    allocateMem(roundDown(stack_min, pageSize), roundUp(stack_size, pageSize));
+    allocateMem(roundDown(memState->stackMin, pageSize),
+                          roundUp(memState->stackSize, pageSize));
 
     // map out initial stack contents
-    IntType sentry_base = stack_base - sentry_size;
+    IntType sentry_base = memState->stackBase - sentry_size;
     IntType aux_data_base = sentry_base - aux_data_size;
     IntType env_data_base = aux_data_base - env_data_size;
     IntType arg_data_base = env_data_base - arg_data_size;
@@ -326,7 +332,7 @@ ArmLiveProcess::argsInit(int pageSize, IntRegIndex spIndex)
     DPRINTF(Stack, "0x%x - envp array\n", envp_array_base);
     DPRINTF(Stack, "0x%x - argv array\n", argv_array_base);
     DPRINTF(Stack, "0x%x - argc \n", argc_base);
-    DPRINTF(Stack, "0x%x - stack min\n", stack_min);
+    DPRINTF(Stack, "0x%x - stack min\n", memState->stackMin);
 
     // write contents to stack
 
@@ -372,7 +378,7 @@ ArmLiveProcess::argsInit(int pageSize, IntRegIndex spIndex)
 
     ThreadContext *tc = system->getThreadContext(contextIds[0]);
     //Set the stack pointer register
-    tc->setIntReg(spIndex, stack_min);
+    tc->setIntReg(spIndex, memState->stackMin);
     //A pointer to a function to run when the program exits. We'll set this
     //to zero explicitly to make sure this isn't used.
     tc->setIntReg(ArgumentReg0, 0);
@@ -398,26 +404,26 @@ ArmLiveProcess::argsInit(int pageSize, IntRegIndex spIndex)
     pc.set(getStartPC() & ~mask(1));
     tc->pcState(pc);
 
-    //Align the "stack_min" to a page boundary.
-    stack_min = roundDown(stack_min, pageSize);
+    //Align the "stackMin" to a page boundary.
+    memState->stackMin = roundDown(memState->stackMin, pageSize);
 }
 
 ArmISA::IntReg
-ArmLiveProcess32::getSyscallArg(ThreadContext *tc, int &i)
+ArmProcess32::getSyscallArg(ThreadContext *tc, int &i)
 {
     assert(i < 6);
     return tc->readIntReg(ArgumentReg0 + i++);
 }
 
 ArmISA::IntReg
-ArmLiveProcess64::getSyscallArg(ThreadContext *tc, int &i)
+ArmProcess64::getSyscallArg(ThreadContext *tc, int &i)
 {
     assert(i < 8);
     return tc->readIntReg(ArgumentReg0 + i++);
 }
 
 ArmISA::IntReg
-ArmLiveProcess32::getSyscallArg(ThreadContext *tc, int &i, int width)
+ArmProcess32::getSyscallArg(ThreadContext *tc, int &i, int width)
 {
     assert(width == 32 || width == 64);
     if (width == 32)
@@ -436,29 +442,28 @@ ArmLiveProcess32::getSyscallArg(ThreadContext *tc, int &i, int width)
 }
 
 ArmISA::IntReg
-ArmLiveProcess64::getSyscallArg(ThreadContext *tc, int &i, int width)
+ArmProcess64::getSyscallArg(ThreadContext *tc, int &i, int width)
 {
     return getSyscallArg(tc, i);
 }
 
 
 void
-ArmLiveProcess32::setSyscallArg(ThreadContext *tc, int i, ArmISA::IntReg val)
+ArmProcess32::setSyscallArg(ThreadContext *tc, int i, ArmISA::IntReg val)
 {
     assert(i < 6);
     tc->setIntReg(ArgumentReg0 + i, val);
 }
 
 void
-ArmLiveProcess64::setSyscallArg(ThreadContext *tc,
-        int i, ArmISA::IntReg val)
+ArmProcess64::setSyscallArg(ThreadContext *tc, int i, ArmISA::IntReg val)
 {
     assert(i < 8);
     tc->setIntReg(ArgumentReg0 + i, val);
 }
 
 void
-ArmLiveProcess32::setSyscallReturn(ThreadContext *tc, SyscallReturn sysret)
+ArmProcess32::setSyscallReturn(ThreadContext *tc, SyscallReturn sysret)
 {
 
     if (objFile->getOpSys() == ObjectFile::FreeBSD) {
@@ -475,7 +480,7 @@ ArmLiveProcess32::setSyscallReturn(ThreadContext *tc, SyscallReturn sysret)
 }
 
 void
-ArmLiveProcess64::setSyscallReturn(ThreadContext *tc, SyscallReturn sysret)
+ArmProcess64::setSyscallReturn(ThreadContext *tc, SyscallReturn sysret)
 {
 
     if (objFile->getOpSys() == ObjectFile::FreeBSD) {

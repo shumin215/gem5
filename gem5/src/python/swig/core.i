@@ -29,7 +29,7 @@
  *          Steve Reinhardt
  */
 
-%module(package="m5.internal") core
+%module(package="_m5") core
 
 %{
 #include "base/misc.hh"
@@ -88,11 +88,29 @@ Tick curTick();
 
 class Checkpoint;
 
+/* JIP: big.LITTLE */
+double getCurFreq();
+double getCurBusyCycles(int i);
+double getCurIdleCycles(int i);
+
 void serializeAll(const std::string &cpt_dir);
 CheckpointIn *getCheckpoint(const std::string &cpt_dir);
 void unserializeGlobals(CheckpointIn &cp);
 
-bool want_warn, warn_verbose;
-bool want_info, info_verbose;
-bool want_hack, hack_verbose;
+class Logger
+{
+  public:
+    enum LogLevel {
+        PANIC = 0,
+        FATAL,
+        WARN,
+        INFO,
+        HACK,
+        NUM_LOG_LEVELS,
+    };
 
+    static void setLevel(LogLevel ll);
+
+  private:
+    Logger();
+};

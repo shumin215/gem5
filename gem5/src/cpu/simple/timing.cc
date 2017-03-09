@@ -41,16 +41,18 @@
  * Authors: Steve Reinhardt
  */
 
+#include "cpu/simple/timing.hh"
+
 #include "arch/locked_mem.hh"
 #include "arch/mmapped_ipr.hh"
 #include "arch/utility.hh"
 #include "base/bigint.hh"
 #include "config/the_isa.hh"
-#include "cpu/simple/timing.hh"
 #include "cpu/exetrace.hh"
 #include "debug/Config.hh"
 #include "debug/Drain.hh"
 #include "debug/ExecFaulting.hh"
+#include "debug/Mwait.hh"
 #include "debug/SimpleCPU.hh"
 #include "mem/packet.hh"
 #include "mem/packet_access.hh"
@@ -58,8 +60,6 @@
 #include "sim/faults.hh"
 #include "sim/full_system.hh"
 #include "sim/system.hh"
-
-#include "debug/Mwait.hh"
 
 using namespace std;
 using namespace TheISA;
@@ -670,9 +670,15 @@ TimingSimpleCPU::advanceInst(const Fault &fault)
         return;
 
     if (fault != NoFault) {
-        advancePC(fault);
         DPRINTF(SimpleCPU, "Fault occured, scheduling fetch event\n");
-        reschedule(fetchEvent, clockEdge(), true);
+
+        advancePC(fault);
+
+        Tick stall = dynamic_pointer_cast<SyscallRetryFault>(fault) ?
+                     clockEdge(syscallRetryLatency) : clockEdge();
+
+        reschedule(fetchEvent, stall, true);
+
         _status = Faulting;
         return;
     }

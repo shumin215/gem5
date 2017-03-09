@@ -39,9 +39,11 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "base/misc.hh"
-#include "cpu/testers/rubytest/Check.hh"
 #include "cpu/testers/rubytest/RubyTester.hh"
+
+#include "base/misc.hh"
+#include "base/trace.hh"
+#include "cpu/testers/rubytest/Check.hh"
 #include "debug/RubyTest.hh"
 #include "mem/ruby/common/SubBlock.hh"
 #include "sim/sim_exit.hh"

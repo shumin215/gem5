@@ -53,6 +53,14 @@ const Tick retryTime = 1000;
 namespace SimClock {
 extern Tick Frequency; ///< The number of ticks that equal one second
 
+/* JIP: big core */
+extern double numBusyCycles;
+extern double numIdleCycles;
+
+/* JIP: LITTLE core */
+extern double tickCycles;
+extern double numCycles;
+
 namespace Float {
 
 /** These variables equal the number of ticks in the unit of time they're
@@ -98,5 +106,10 @@ void setOutputDir(const std::string &dir);
 class Callback;
 void registerExitCallback(Callback *callback);
 void doExitCleanup();
+
+//JIP:big.LITTLE
+double getCurFreq();
+double getCurBusyCycles(int i);
+double getCurIdleCycles(int i);
 
 #endif /* __SIM_CORE_HH__ */

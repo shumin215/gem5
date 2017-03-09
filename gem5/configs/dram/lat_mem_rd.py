@@ -80,7 +80,7 @@ except:
 
 parser = optparse.OptionParser()
 
-parser.add_option("--mem-type", type="choice", default="DDR3_1600_x64",
+parser.add_option("--mem-type", type="choice", default="DDR3_1600_8x8",
                   choices=MemConfig.mem_names(),
                   help = "type of memory to use")
 parser.add_option("--mem-size", action="store", type="string",
@@ -252,6 +252,7 @@ system.tgen = TrafficGen(config_file = cfg_file_name,
 
 # add a communication monitor
 system.monitor = CommMonitor()
+system.monitor.footprint = MemFootprintProbe()
 
 # connect the traffic generator to the system
 system.tgen.port = system.monitor.slave

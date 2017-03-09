@@ -37,6 +37,8 @@
  * Authors: Andreas Sandberg
  */
 
+#include "cpu/kvm/base.hh"
+
 #include <linux/kvm.h>
 #include <sys/ioctl.h>
 #include <sys/mman.h>
@@ -48,7 +50,6 @@
 
 #include "arch/mmapped_ipr.hh"
 #include "arch/utility.hh"
-#include "cpu/kvm/base.hh"
 #include "debug/Checkpoint.hh"
 #include "debug/Drain.hh"
 #include "debug/Kvm.hh"
@@ -58,14 +59,12 @@
 #include "sim/process.hh"
 #include "sim/system.hh"
 
-#include <signal.h>
-
 /* Used by some KVM macros */
 #define PAGE_SIZE pageSize
 
 BaseKvmCPU::BaseKvmCPU(BaseKvmCPUParams *params)
     : BaseCPU(params),
-      vm(*params->kvmVM),
+      vm(*params->system->getKvmVM()),
       _status(Idle),
       dataPort(name() + ".dcache_port", this),
       instPort(name() + ".icache_port", this),

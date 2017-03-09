@@ -35,13 +35,13 @@
 #include <string>
 #include <vector>
 
+#include "mem/page_table.hh"
 #include "sim/byteswap.hh"
 #include "sim/process.hh"
 
 class ObjectFile;
-class System;
 
-class SparcLiveProcess : public LiveProcess
+class SparcProcess : public Process
 {
   protected:
 
@@ -50,8 +50,8 @@ class SparcLiveProcess : public LiveProcess
     // The locations of the fill and spill handlers
     Addr fillStart, spillStart;
 
-    SparcLiveProcess(LiveProcessParams * params,
-            ObjectFile *objFile, Addr _StackBias);
+    SparcProcess(ProcessParams * params, ObjectFile *objFile,
+                 Addr _StackBias);
 
     void initState();
 
@@ -61,7 +61,7 @@ class SparcLiveProcess : public LiveProcess
   public:
 
     // Handles traps which request services from the operating system
-    virtual void handleTrap(int trapNum, ThreadContext *tc);
+    virtual void handleTrap(int trapNum, ThreadContext *tc, Fault *fault);
 
     Addr readFillStart() { return fillStart; }
     Addr readSpillStart() { return spillStart; }
@@ -70,19 +70,19 @@ class SparcLiveProcess : public LiveProcess
     void setSyscallReturn(ThreadContext *tc, SyscallReturn return_value);
 };
 
-class Sparc32LiveProcess : public SparcLiveProcess
+class Sparc32Process : public SparcProcess
 {
   protected:
 
-    Sparc32LiveProcess(LiveProcessParams * params, ObjectFile *objFile) :
-            SparcLiveProcess(params, objFile, 0)
+    Sparc32Process(ProcessParams * params, ObjectFile *objFile)
+        : SparcProcess(params, objFile, 0)
     {
         // Set up stack. On SPARC Linux, stack goes from the top of memory
         // downward, less the hole for the kernel address space.
-        stack_base = (Addr)0xf0000000ULL;
+        memState->stackBase = (Addr)0xf0000000ULL;
 
         // Set up region for mmaps.
-        mmap_end = 0x70000000;
+        memState->mmapEnd = 0x70000000;
     }
 
     void initState();
@@ -95,24 +95,24 @@ class Sparc32LiveProcess : public SparcLiveProcess
 
     SparcISA::IntReg getSyscallArg(ThreadContext *tc, int &i);
     /// Explicitly import the otherwise hidden getSyscallArg
-    using LiveProcess::getSyscallArg;
+    using Process::getSyscallArg;
 
     void setSyscallArg(ThreadContext *tc, int i, SparcISA::IntReg val);
 };
 
-class Sparc64LiveProcess : public SparcLiveProcess
+class Sparc64Process : public SparcProcess
 {
   protected:
 
-    Sparc64LiveProcess(LiveProcessParams * params, ObjectFile *objFile) :
-            SparcLiveProcess(params, objFile, 2047)
+    Sparc64Process(ProcessParams * params, ObjectFile *objFile)
+        : SparcProcess(params, objFile, 2047)
     {
         // Set up stack. On SPARC Linux, stack goes from the top of memory
         // downward, less the hole for the kernel address space.
-        stack_base = (Addr)0x80000000000ULL;
+        memState->stackBase = (Addr)0x80000000000ULL;
 
         // Set up region for mmaps.
-        mmap_end = 0xfffff80000000000ULL;
+        memState->mmapEnd = 0xfffff80000000000ULL;
     }
 
     void initState();
@@ -125,7 +125,7 @@ class Sparc64LiveProcess : public SparcLiveProcess
 
     SparcISA::IntReg getSyscallArg(ThreadContext *tc, int &i);
     /// Explicitly import the otherwise hidden getSyscallArg
-    using LiveProcess::getSyscallArg;
+    using Process::getSyscallArg;
 
     void setSyscallArg(ThreadContext *tc, int i, SparcISA::IntReg val);
 };

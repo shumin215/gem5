@@ -31,6 +31,8 @@
 #include <Python.h>
 
 #include "python/swig/pyevent.hh"
+
+#include "base/misc.hh"
 #include "sim/async.hh"
 #include "sim/eventq.hh"
 

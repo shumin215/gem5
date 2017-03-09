@@ -31,12 +31,13 @@
  *          Steve Reinhardt
  */
 
+#include "sim/core.hh"
+
 #include <iostream>
 #include <string>
 
 #include "base/callback.hh"
 #include "base/output.hh"
-#include "sim/core.hh"
 #include "sim/eventq.hh"
 
 using namespace std;
@@ -44,6 +45,14 @@ using namespace std;
 namespace SimClock {
 /// The simulated frequency of curTick(). (In ticks per second)
 Tick Frequency;
+
+//JIP: big core
+double numBusyCycles;
+double numIdleCycles;
+
+//JIP: LITTLE core
+double tickCycles;
+double numCycles;
 
 namespace Float {
 double s;
@@ -130,3 +139,24 @@ doExitCleanup()
     cout.flush();
 }
 
+//JIP:big.LITTLE
+double getCurFreq()
+{
+	return SimClock::Frequency;
+}
+
+double getCurBusyCycles(int i)
+{
+	if (i == 0)
+		return SimClock::numBusyCycles;
+	else
+		return SimClock::numCycles;
+}
+
+double getCurIdleCycles(int i)
+{
+	if (i == 0)
+		return SimClock::numIdleCycles;
+	else
+		return SimClock::tickCycles;
+}

@@ -42,9 +42,11 @@
  *          Andreas Hansson
  */
 
+#include "cpu/testers/memtest/memtest.hh"
+
 #include "base/random.hh"
 #include "base/statistics.hh"
-#include "cpu/testers/memtest/memtest.hh"
+#include "base/trace.hh"
 #include "debug/MemTest.hh"
 #include "mem/mem_object.hh"
 #include "sim/sim_exit.hh"

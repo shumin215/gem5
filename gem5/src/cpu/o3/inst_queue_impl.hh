@@ -752,8 +752,6 @@ InstructionQueue<Impl>::scheduleReadyInsts()
     IssueStruct *i2e_info = issueToExecuteQueue->access(0);
 
     DynInstPtr mem_inst;
-
-	/* Check if there is an instruction completed by DTB translation */
     while (mem_inst = getDeferredMemInstToExecute()) {
         addReadyMemInst(mem_inst);
     }
@@ -807,11 +805,6 @@ InstructionQueue<Impl>::scheduleReadyInsts()
         Cycles op_latency = Cycles(1);
         ThreadID tid = issuing_inst->threadNumber;
 
-		/********************************************
-		 * Get operation latencies of instructions 
-		 *
-		 * op_latency: latency value of each instruction
-		 *********************************************/
         if (op_class != No_OpClass) {
             idx = fuPool->getUnit(op_class);
             issuing_inst->isFloating() ? fpAluAccesses++ : intAluAccesses++;
@@ -1394,7 +1387,6 @@ InstructionQueue<Impl>::addIfReady(DynInstPtr &inst)
             return;
         }
 
-		/* The other instructions except for memory operations */
         OpClass op_class = inst->opClass();
 
         DPRINTF(IQ, "Instruction is ready to issue, putting it onto "

@@ -37,24 +37,21 @@
  * Authors: Gabe Black
  */
 
+#include "arch/x86/tlb.hh"
+
 #include <cstring>
 #include <memory>
 
 #include "arch/generic/mmapped_ipr.hh"
+#include "arch/x86/faults.hh"
 #include "arch/x86/insts/microldstop.hh"
+#include "arch/x86/pagetable_walker.hh"
 #include "arch/x86/regs/misc.hh"
 #include "arch/x86/regs/msr.hh"
-#include "arch/x86/faults.hh"
-#include "arch/x86/pagetable.hh"
-#include "arch/x86/pagetable_walker.hh"
-#include "arch/x86/tlb.hh"
 #include "arch/x86/x86_traits.hh"
-#include "base/bitfield.hh"
 #include "base/trace.hh"
-#include "cpu/base.hh"
 #include "cpu/thread_context.hh"
 #include "debug/TLB.hh"
-#include "mem/packet_access.hh"
 #include "mem/page_table.hh"
 #include "mem/request.hh"
 #include "sim/full_system.hh"
@@ -234,13 +231,10 @@ TLB::finalizePhysical(RequestPtr req, ThreadContext *tc, Mode mode) const
     AddrRange m5opRange(0xFFFF0000, 0xFFFFFFFF);
 
     if (m5opRange.contains(paddr)) {
-        if (m5opRange.contains(paddr)) {
-            req->setFlags(Request::MMAPPED_IPR | Request::GENERIC_IPR |
-                          Request::STRICT_ORDER);
-            req->setPaddr(GenericISA::iprAddressPseudoInst(
-                            (paddr >> 8) & 0xFF,
-                            paddr & 0xFF));
-        }
+        req->setFlags(Request::MMAPPED_IPR | Request::GENERIC_IPR |
+                      Request::STRICT_ORDER);
+        req->setPaddr(GenericISA::iprAddressPseudoInst((paddr >> 8) & 0xFF,
+                                                       paddr & 0xFF));
     } else if (FullSystem) {
         // Check for an access to the local APIC
         LocalApicBase localApicBase =

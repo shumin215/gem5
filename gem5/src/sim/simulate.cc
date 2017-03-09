@@ -31,6 +31,8 @@
  *          Steve Reinhardt
  */
 
+#include "sim/simulate.hh"
+
 #include <mutex>
 #include <thread>
 
@@ -41,7 +43,6 @@
 #include "sim/eventq_impl.hh"
 #include "sim/sim_events.hh"
 #include "sim/sim_exit.hh"
-#include "sim/simulate.hh"
 #include "sim/stat_control.hh"
 
 //! Mutex for handling async events.
@@ -103,7 +104,7 @@ simulate(Tick num_cycles)
                                        "simulate() limit reached", 0);
     }
 
-    inform("Entering event queue @ %d.  Starting simulation...\n", curTick());
+    //inform("Entering event queue @ %d.  Starting simulation...\n", curTick());
 
     if (num_cycles < MaxTick - curTick())
         num_cycles = curTick() + num_cycles;

@@ -29,10 +29,12 @@
  */
 
 #include "arch/x86/pseudo_inst.hh"
+
 #include "arch/x86/system.hh"
+#include "cpu/thread_context.hh"
 #include "debug/PseudoInst.hh"
+#include "mem/se_translating_port_proxy.hh"
 #include "sim/process.hh"
-#include "sim/system.hh"
 
 using namespace X86ISA;
 
@@ -47,7 +49,9 @@ m5Syscall(ThreadContext *tc)
 {
     DPRINTF(PseudoInst, "PseudoInst::m5Syscall()\n");
 
-    tc->syscall(tc->readIntReg(INTREG_RAX));
+    Fault fault;
+    tc->syscall(tc->readIntReg(INTREG_RAX), &fault);
+
     MiscReg rflags = tc->readMiscReg(MISCREG_RFLAGS);
     rflags &= ~(1 << 16);
     tc->setMiscReg(MISCREG_RFLAGS, rflags);
