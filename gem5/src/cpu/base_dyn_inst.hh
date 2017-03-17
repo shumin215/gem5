@@ -410,6 +410,11 @@ class BaseDynInst : public ExecContext, public RefCounted
         _prevDestRegIdx[idx] = previous_rename;
     }
 
+	int getDestRegister(int idx)
+	{
+		return (int)_destRegIdx[idx];
+	}
+
     /** Renames a source logical register to the physical register which
      *  has/will produce that logical register's result.
      *  @todo: add in whether or not the source register is ready.
@@ -418,6 +423,11 @@ class BaseDynInst : public ExecContext, public RefCounted
     {
         _srcRegIdx[idx] = renamed_src;
     }
+
+	int getSrcRegister(int idx)
+	{
+		return (int)_srcRegIdx[idx];
+	}
 
     /** Flattens a destination architectural register index into a logical
      * index.

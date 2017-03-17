@@ -62,6 +62,8 @@
 #include "debug/O3PipeView.hh"
 #include "params/DerivO3CPU.hh"
 
+#define HISTORY_TABLE_SIZE 1000
+
 using namespace std;
 
 template<class Impl>
@@ -95,6 +97,15 @@ DefaultIEW<Impl>::DefaultIEW(O3CPU *_cpu, DerivO3CPUParams *params)
     _status = Active;
     exeStatus = Running;
     wbStatus = Idle;
+
+	/* Initialize IXU history table */
+	IXU_history_table = new IXU_history_entries*[HISTORY_TABLE_SIZE];
+
+	for(int i=0; i<HISTORY_TABLE_SIZE; i++)
+	{
+		IXU_history_table[i] = new IXU_history_entries;
+		initializeIHT(IXU_history_table[i]);
+	}
 
     // Setup wire to read instructions coming from issue.
     fromIssue = issueToExecQueue.getWire(-issueToExecuteDelay);
@@ -956,7 +967,7 @@ DefaultIEW<Impl>::dispatchInsts(ThreadID tid)
 
     int insts_to_add = insts_to_dispatch.size();
 
-    DynInstPtr inst;
+	DynInstPtr inst;
     bool add_to_iq = false;
     int dis_num_inst = 0;
 
@@ -1005,6 +1016,38 @@ DefaultIEW<Impl>::dispatchInsts(ThreadID tid)
 
             continue;
         }
+
+	/********************************************************* 
+	 *
+	 *  This is for Parallel IXU
+	 * 
+	 * Only none of memory instructions and all of instructions of 
+	 * 1 execution latency have to be checked
+	 *
+	 * *******************************************************/
+
+		/* check if an instruction is not memory instruction 
+		 * or has one operation latency */
+		if(!inst->isMemRef() && getLatency(inst) == 1)
+		{
+			/* check an instruction can enter IXU */
+			if(canInstEnterIXU(inst))
+			{
+				/* Updates dest regs of instruction in IHT */
+				setDestRegInIHT(inst);
+
+				DPRINTF(IEW, "[tid:%i]: IXU-Issue: instruction is moved to IXU. \n", tid);
+
+				/* Insert instruction to buffer in IXU */
+				buffer_of_ixu[0].push_back(inst);
+				insts_to_dispatch.pop();
+
+				continue;
+			}
+			/* If an instruction can't enter IXU, just go to OXU */
+		}
+
+	/********************************************************/
 
         // Check for full conditions.
         if (instQueue.isFull(tid)) {
@@ -1185,6 +1228,100 @@ DefaultIEW<Impl>::executeInsts()
         ThreadID tid = *threads++;
         fetchRedirect[tid] = false;
     }
+
+	/********************************************************
+	 *
+	 *  IXU is operated right here
+	 *
+	 *  buf_idx:2 -> Last stage
+	 *  buf_idx:1 -> 2nd stage
+	 *  buf_idx:0 -> 1st stage
+	 *
+	 * *****************************************************/
+
+	/* Through buffers in IXU, updates instruction's status */
+	updateInstInIXUBuffer();
+
+	/* 1. Data is fetched from buffer of 3rd stage */
+	for(int buf_idx = 2; buf_idx >= 0; buf_idx--)
+	{
+		int num_of_insts_ixu_buffer = buffer_of_ixu[buf_idx].size();
+
+		if(num_of_insts_ixu_buffer > 3)
+		{
+			DPRINTF(IEW, "IXU: Buffer size of 3rd stage is exceeded.\n");
+
+			assert(num_of_insts_ixu_buffer <= 3);
+		}
+
+		for(int idx = 0; idx < num_of_insts_ixu_buffer; idx++)
+		{
+			DynInstPtr inst = buffer_of_ixu[buf_idx].front();
+
+			// Notify potential listeners that this instruction has started
+			// executing
+			ppExecute->notify(inst);
+
+			/* Check if the instruction is squashed, so skip it */
+			if(inst->isSquashed())
+			{
+				DPRINTF(IEW, "IXU: Instruction was squashed. PC: %s, [tid:%i]"
+							 " [sn:%i]\n", inst->pcState(), inst->threadNumber,
+							 inst->seqNum);
+
+			/* Consider the instruction is executed so that commit can go ahead 
+			 * and retire the instruction */
+				inst->setExecuted();
+
+            /* Not sure if I should set this here or just let commit try to
+             	commit any squashed instructions.  I like the latter a bit more.*/
+				inst->setCanCommit();
+
+				buffer_of_ixu[buf_idx].pop_front();
+				continue;
+			}
+
+			/* Double check whether instruction is for memory operation 
+			 * and is ready to issue */
+			if(!inst->isMemRef() && inst->readyToIssue())
+			{
+				if(inst->getFault() == NoFault)
+				{
+					inst->execute();
+
+					if(!inst->readPredicate())
+						inst->forwardOldRegs();
+				}
+
+				inst->setExecuted();
+				instToCommit(inst);
+
+//				updateIHTAfterExec(inst);
+			}
+			/* If an instruction can't be executed at last IXU satge, 
+			 * it'll cause problems */
+			else
+			{
+				DPRINTF(IEW, "IXU: ***There is still left instruction that is not executed"
+						"in IXU.***\n");
+			}
+
+			updateExeInstStats(inst);
+			buffer_of_ixu[buf_idx].pop_front();
+
+			/* Not executed instructions is lifted to next IXU stage 
+			 * except for 3rd IXU stage */
+			if(buf_idx != 2 && !inst->isExecuted())
+			{
+				buffer_of_ixu[buf_idx+1].push_back(inst);
+
+			/* Update scoreboard and set 'CanIssue' flag in each instruction */
+
+			}
+		}
+	}
+
+	/*********************************************************/
 
     // Uncomment this if you want to see all available instructions.
     // @todo This doesn't actually work anymore, we should fix it.
@@ -1428,9 +1565,8 @@ DefaultIEW<Impl>::writebackInsts()
         // E.g. Strictly ordered loads have not actually executed when they
         // are first sent to commit.  Instead commit must tell the LSQ
         // when it's ready to execute the strictly ordered load.
-        if (!inst->isSquashed() && inst->isExecuted() && inst->getFault() == NoFault) {
-            int dependents = instQueue.wakeDependents(inst);
-
+        if (!inst->isSquashed() && inst->isExecuted() && inst->getFault() == NoFault)
+		{
             for (int i = 0; i < inst->numDestRegs(); i++) {
                 //mark as Ready
                 DPRINTF(IEW,"Setting Destination Register %i\n",
@@ -1438,10 +1574,20 @@ DefaultIEW<Impl>::writebackInsts()
                 scoreboard->setReg(inst->renamedDestRegIdx(i));
             }
 
-            if (dependents) {
-                producerInst[tid]++;
-                consumerInst[tid]+= dependents;
-            }
+			if(!isExecutedInIXU(inst))
+			{
+				int dependents = instQueue.wakeDependents(inst);
+
+				if (dependents) {
+					producerInst[tid]++;
+					consumerInst[tid]+= dependents;
+				}
+			}
+			else
+			{
+				updateIHTAfterExec(inst);
+			}
+
             writebackCount[tid]++;
         }
     }
@@ -1636,6 +1782,158 @@ DefaultIEW<Impl>::checkMisprediction(DynInstPtr &inst)
             }
         }
     }
+}
+
+template <typename Impl>
+int DefaultIEW<Impl>::getLatency(DynInstPtr& _inst)
+{
+	Cycles op_latency = Cycles(1);
+	OpClass op_class = _inst->opClass();
+
+	if(op_class != No_OpClass)
+	{
+		op_latency = fuPool->getOpLatency(op_class);
+	}
+
+	return (int)op_latency;
+}
+
+template <typename Impl>
+void DefaultIEW<Impl>::initializeIHT(IXU_history_entries *_IHT)
+{
+	_IHT->execution_type = OXU;
+}
+
+template <typename Impl>
+bool DefaultIEW<Impl>::isAvailableInIXU(int src_reg)
+{
+	if(IXU_history_table[src_reg]->execution_type == IXU)
+	{
+		return true;
+	}
+	else
+	{
+		return false;
+	}
+}
+
+template <typename Impl>
+bool DefaultIEW<Impl>::canInstEnterIXU(DynInstPtr &inst)
+{
+	/* 1. instruction can be executed immediately */
+	if(inst->readyToIssue())
+	{
+		return true;
+	}
+
+	/* 2. instruction can get dependent data by forwarding result 
+	 * of preceeding instruction */
+	int num_of_src_regs = (int)inst->numSrcRegs();
+
+	for(int src_idx=0; src_idx<num_of_src_regs; src_idx++)
+	{
+		int src_reg = (int)inst->getSrcRegister(src_idx);
+		/* 1. If src reg is already ready state */
+		if(inst->isReadySrcRegIdx(src_idx))
+		{
+			continue;
+		}
+		/* 2. src reg is not ready, but can get data of src reg in IXU */
+		else if(isAvailableInIXU(src_reg))
+		{
+			continue;
+		}
+		/* 3. src reg is never available when instruction run in IXU */
+		else
+		{
+			return false;
+		}
+	}
+
+	return true;
+}
+
+template <typename Impl>
+void DefaultIEW<Impl>::setDestRegInIHT(DynInstPtr &inst)
+{
+	int num_of_dest_regs = (int)inst->numDestRegs();
+
+	for(int dest_idx = 0; dest_idx<num_of_dest_regs; dest_idx++)
+	{
+		int dest_reg = (int)inst->getDestRegister(dest_idx);
+		IXU_history_table[dest_reg]->execution_type = IXU;
+	}
+}
+
+template <typename Impl>
+void DefaultIEW<Impl>::updateIHTAfterExec(DynInstPtr &inst)
+{
+	int num_of_dest_regs = (int)inst->numDestRegs();
+
+	for(int dest_idx = 0; dest_idx < num_of_dest_regs; dest_idx++)
+	{
+		int dest_reg = (int)inst->getDestRegister(dest_idx);
+		IXU_history_table[dest_reg]->execution_type = OXU;
+	}
+}
+
+template <typename Impl>
+bool DefaultIEW<Impl>::isExecutedInIXU(DynInstPtr &inst)
+{
+	bool result = false;
+	int count = 0;
+
+	for(int dest_idx = 0; dest_idx < inst->numDestRegs(); dest_idx++)
+	{
+		if(IXU_history_table[(int)inst->getDestRegister(dest_idx)]->execution_type
+				== IXU)
+		{
+			count++;
+		}
+	}
+
+	if(count == inst->numDestRegs())
+	{
+		result = true;
+	}
+
+	return result;
+}
+
+template <typename Impl>
+void DefaultIEW<Impl>::updateInstInIXUBuffer(void)
+{
+	/* Select buffer of which stage */
+	for(int idx=0; idx<3; idx++)
+	{
+		int buf_size = buffer_of_ixu[idx].size();
+
+		/* Select instruction in buffer of IXU */
+		for(int buf_idx=0; buf_idx<buf_size; buf_idx++)
+		{
+			DynInstPtr inst = buffer_of_ixu[idx].front();
+			bool isIssuable = true;
+			int num_of_src_regs = inst->numSrcRegs();
+
+		/* Check source register of an instruction */
+			for(int src_idx=0; src_idx < num_of_src_regs; src_idx++)
+			{
+				int src_reg = inst->getSrcRegister(src_idx);
+
+		/* If any source register is not ready */
+				if(!scoreboard->getReg(src_reg))
+				{
+					isIssuable = false;
+					break;
+				}
+			}
+
+			if(isIssuable == true)
+			{
+				inst->setCanIssue();
+			}
+		}
+	}
 }
 
 #endif//__CPU_O3_IEW_IMPL_IMPL_HH__

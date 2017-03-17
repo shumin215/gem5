@@ -45,6 +45,7 @@
 
 #include <queue>
 #include <set>
+#include <deque>
 
 #include "base/statistics.hh"
 #include "cpu/o3/comm.hh"
@@ -294,8 +295,59 @@ class DefaultIEW
     void tick();
 
   private:
+
+	/* Gets latency of an instruction */
+	int getLatency(DynInstPtr &inst);
+
     /** Updates execution stats based on the instruction. */
     void updateExeInstStats(DynInstPtr &inst);
+
+//	/* Function unit pool for calculating latency of opclass */
+//	FUPool *fuPoolInIEWStage;
+	
+	/* This is an entry of IXU History Table */
+	enum ExecutionType
+	{
+		IXU,
+		OXU
+	};
+
+	struct IXU_history_entries
+	{
+		/* an instruction is executed at IXU or OXU*/
+		ExecutionType execution_type; 	
+//		/* if physical register is available to be issued for IXU */
+//		bool available_flag;
+	};
+
+	/* This is for checking availability of entering IXU about instructions 
+	 * This is also called by IHT (IXU History Table) */
+	IXU_history_entries **IXU_history_table;
+
+	/* Buffer in front of each IXU FU */
+	std::deque<DynInstPtr> buffer_of_ixu[3];
+
+	/* Initialize IHT (IXU History Table */
+	void initializeIHT(IXU_history_entries *_IHT);
+
+	/* Update IXU History Table After Execution */
+	void updateIHTAfterExec(DynInstPtr &inst);
+
+	/* Check an instruction can enter IXU */
+	bool canInstEnterIXU(DynInstPtr &inst);
+
+	/* Check source register index in IXU History Table */
+	bool isAvailableInIXU(int src_reg);
+
+	/* Update IXU History Table */
+	void setDestRegInIHT(DynInstPtr &inst);
+
+	/* Check if an instruction was executed in IXU for releasing 
+	 * dependent chain */
+	bool isExecutedInIXU(DynInstPtr &inst);
+
+	/* Through buffer in IXU, updates instructions' status */
+	void updateInstInIXUBuffer(void);
 
     /** Pointer to main time buffer used for backwards communication. */
     TimeBuffer<TimeStruct> *timeBuffer;
