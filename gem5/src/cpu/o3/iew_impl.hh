@@ -1291,11 +1291,11 @@ DefaultIEW<Impl>::executeInsts()
             // Such case can happen when it faulted during ITLB translation.
             // If we execute the instruction (even if it's a nop) the fault
             // will be replaced and we will lose it.
-            if (inst->getFault() == NoFault) {
+            //if (inst->getFault() == NoFault) {
                 inst->execute();
                 if (!inst->readPredicate())
                     inst->forwardOldRegs();
-            }
+            //}
 
             inst->setExecuted();
 

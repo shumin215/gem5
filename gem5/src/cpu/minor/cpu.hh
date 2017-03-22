@@ -125,6 +125,10 @@ class MinorCPU : public BaseCPU
     ~MinorCPU();
 
   public:
+  
+	/** big.LITTLE implementation - JIP **/	
+	int index_cpu;
+  
     /** Starting, waking and initialisation */
     void init() override;
     void startup() override;
@@ -160,6 +164,9 @@ class MinorCPU : public BaseCPU
     /** Switching interface from BaseCPU */
     void switchOut() override;
     void takeOverFrom(BaseCPU *old_cpu) override;
+	
+	/* big.LITTLE implementation - JIP */
+	void setCpuIndex(int i);
 
     /** Thread activation interface from BaseCPU. */
     void activateContext(ThreadID thread_id) override;

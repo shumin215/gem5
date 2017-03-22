@@ -401,151 +401,165 @@ def restoreSimpointCheckpoint():
     print 'Exiting @ tick %i because %s' % (m5.curTick(), exit_cause)
     sys.exit(exit_event.getCode())
 	
-def bigLITTLESwitch(testsys, bigLITTLE_switch_cpu_list, maxtick, switch_freq, cpu_clock):
+def bigLITTLESwitch(testsys, bigLITTLE_switch_cpu_list, maxtick, switch_freq, num_cpu):
     print "starting big.LITTLE switch loop"
 
-    cur_freq = 2100
-    core_type = 'big_core'
-
-    big_freq_list = [[800, 0], [900, 0], [1000, 0], [1100, 0], [1200, 0], [1300, 0], [1400, 0],
-                    [1500, 0], [1600, 0], [1700, 0], [1800, 0], [1900, 0], [2000, 0], [2100, 0]]
-    Llittle_freq_list = [[400, 0], [500, 0], [600, 0], [700, 0], [800, 0], [900, 0], [1000, 0],
-                        [1100, 0], [1200, 0], [1300, 0], [1400, 0], [1500, 0]]
+	#Define core types and frequencies for each core (Initialized to the big core and max freq.)
+    core_type = ['big_core'] * num_cpu
+    cur_freq = [2100] * num_cpu
 	
+	#Define statistics field for each core and each freq.
+    big_freq_list = [[800, 0], [900, 0], [1000, 0], [1100, 0], [1200, 0], [1300, 0], [1400, 0],
+                    [1500, 0], [1600, 0], [1700, 0], [1800, 0], [1900, 0], [2000, 0], [2100, 0]] * num_cpu
+    Llittle_freq_list = [[400, 0], [500, 0], [600, 0], [700, 0], [800, 0], [900, 0], [1000, 0],
+                        [1100, 0], [1200, 0], [1300, 0], [1400, 0], [1500, 0]] * num_cpu
+	
+	#Define max. and min. freq for each core type
     big_min_freq = 800
     big_max_freq = 2100
     little_min_freq = 400
     little_max_freq = 1500
-
-    big_past_total_cycles = 0
-    big_past_idle_cycles = 0
-    
-    little_past_total_cycles = 0
-    little_past_idle_cycles = 0
 	
-    freq_up_thresh = 0.9
-    freq_down_thresh = 0.8
-
+	#Define Switching threshold
+    freq_up_thresh = 0.95
+    freq_down_thresh = 0.85
+	
+	#For estimating utilization in big core
+    big_past_total_cycles = [0] * num_cpu
+    big_past_idle_cycles = [0] * num_cpu
+    
+	#For estimating utilization in LITTLE core
+    little_past_total_cycles = [0] * num_cpu
+    little_past_idle_cycles = [0] * num_cpu
+	
+	#To get utilization value
+    current_total_cycles = 0
+    current_idle_cycles = 0
+	
+    m5.setCpuIndex(bigLITTLE_switch_cpu_list)
+	
     while True:
 	    #Simulate target architecture during 'switch_freq'
-        #print "Running big.LITTLE cluster"
+        print "Running big.LITTLE cluster"
         exit_event = m5.simulate(switch_freq)
         exit_cause = exit_event.getCause()
-        
-		#If the simulation is end with other reason, exit the simulation loop
+		
+		#If the simulation is end with other reason, print simulation cycles and exit the simulation loop
         if exit_cause != "simulate() limit reached":
-            print "big Core DVFS Stat."
-            for idx in range(14):
-                print "%dMHz: %d" % (big_freq_list[idx][0], big_freq_list[idx][1])
-            print "LITTLE Core DVFS Stat."
-            for idx in range(12):
-                print "%dMHz: %d" % (Llittle_freq_list[idx][0], Llittle_freq_list[idx][1])	
+            #print "big Core DVFS Stat."
+            #for idx in range(14):
+            #    print "%dMHz: %d" % (big_freq_list[idx][0], big_freq_list[idx][1])
+            #print "LITTLE Core DVFS Stat."
+            #for idx in range(12):
+            #    print "%dMHz: %d" % (Llittle_freq_list[idx][0], Llittle_freq_list[idx][1])	
             return exit_event
-        
+		
+        #To access for loop index
+        core_index = 0
+		
         for old_cpu, new_cpu in bigLITTLE_switch_cpu_list:
 
             #DVFS Handling
-            if core_type == 'big_core':
-                current_total_cycles = m5.getCurBusyCycles(0)
-                current_idle_cycles = m5.getCurIdleCycles(0)
+            if core_type[core_index] == 'big_core':
+				#Get busy and idle cycles during past quantum
+                current_total_cycles = m5.getCurBusyCycles(0, core_index)
+                current_idle_cycles = m5.getCurIdleCycles(0, core_index)
             
                 #Calculate quantum cycles
-                quantum_total_cycles = current_total_cycles - big_past_total_cycles
-                quantum_idle_cycles = current_idle_cycles - big_past_idle_cycles
-
-                big_past_total_cycles = current_total_cycles
-                big_past_idle_cycles = current_idle_cycles				
+                quantum_total_cycles = current_total_cycles - big_past_total_cycles[core_index]
+                quantum_idle_cycles = current_idle_cycles - big_past_idle_cycles[core_index]
+            
+                big_past_total_cycles[core_index] = current_total_cycles
+                big_past_idle_cycles[core_index] = current_idle_cycles				
 				
             else:
-                current_total_cycles = m5.getCurBusyCycles(1)
-                current_idle_cycles = m5.getCurBusyCycles(1) - m5.getCurIdleCycles(1)
+                current_total_cycles = m5.getCurBusyCycles(1, core_index)
+                current_idle_cycles = m5.getCurBusyCycles(1, core_index) - m5.getCurIdleCycles(1, core_index)
 				
                 #Calculate quantum cycles
-                quantum_total_cycles = current_total_cycles - little_past_total_cycles
-                quantum_idle_cycles = current_idle_cycles - little_past_idle_cycles
+                quantum_total_cycles = current_total_cycles - little_past_total_cycles[core_index]
+                quantum_idle_cycles = current_idle_cycles - little_past_idle_cycles[core_index]
+            
+                little_past_total_cycles[core_index] = current_total_cycles
+                little_past_idle_cycles[core_index] = current_idle_cycles
 
-                little_past_total_cycles = current_total_cycles
-                little_past_idle_cycles = current_idle_cycles
-			
-			
-            #print "big past total: %lf" % big_past_total_cycles
-            #print "big past idle: %lf" % big_past_idle_cycles
-            #print "little past total: %lf" % little_past_total_cycles
-            #print "little past idle: %lf" % little_past_idle_cycles
-			
-            #print "quantum total: %lf" % quantum_total_cycles
-            #print "quantum idle: %lf" % quantum_idle_cycles
+                #print  "%lf, %lf" & (old_cpu.idleCycles, old_cpu.tickCycles)
+				
+            print "Core %d Type: %s, quantum_total_cycles: %lf, quantum_idle_cycles: %lf" % (core_index, core_type[core_index], quantum_total_cycles, quantum_idle_cycles)
+            
 			
             #Calculate core utilization
-            core_utilization = (quantum_total_cycles - quantum_idle_cycles) / quantum_total_cycles
-            #core_utilization = 0.7
+            if quantum_total_cycles != 0:
+                core_utilization = (quantum_total_cycles - quantum_idle_cycles) / quantum_total_cycles
 			
             #Current Core is big core (change)
-            if core_type == 'big_core':
+            if core_type[core_index] == 'big_core':
                 #Cycle Statistics
                 for idx in range(14):
-                    if big_freq_list[idx][0] == cur_freq:
-                        big_freq_list[idx][1] += quantum_total_cycles
+                    if big_freq_list[14*core_index+idx][0] == cur_freq[core_index]:
+                        big_freq_list[14*core_index+idx][1] += quantum_total_cycles
 				#Frequency up-scaling
-                if core_utilization >= freq_up_thresh and cur_freq != big_max_freq:
-                    cur_freq += 100
+                if core_utilization >= freq_up_thresh and cur_freq[core_index] != big_max_freq:
+                    cur_freq[core_index] += 100
                 #Frequency down-scaling          
-                elif core_utilization < freq_down_thresh and cur_freq != big_min_freq:
-                    cur_freq -= 100
+                elif core_utilization < freq_down_thresh and cur_freq[core_index] != big_min_freq:
+                    cur_freq[core_index] -= 100
                 #Core switching
-                elif core_utilization < freq_down_thresh and cur_freq == big_min_freq:
-                    m5.switchCpus(testsys, bigLITTLE_switch_cpu_list)
-                    core_type = 'LITTLE_core'
-                    cur_freq = little_max_freq
-                    tmp_cpu_list = []
+                elif core_utilization < freq_down_thresh and cur_freq[core_index] == big_min_freq:
+                    print "Core %d Switch: big --> LITTLE" % (core_index)
+                    switching_cpu_list = []
+                    switching_cpu_index = 0
                     for old_cpu, new_cpu in bigLITTLE_switch_cpu_list:
-                        tmp_cpu_list.append((new_cpu, old_cpu))
-                    bigLITTLE_switch_cpu_list = tmp_cpu_list    
-            
+                        if switching_cpu_index == core_index:
+                            switching_cpu_list.append((old_cpu, new_cpu))
+
+                            m5.switchCpus(testsys, switching_cpu_list)
+                            core_type[core_index] = 'LITTLE_core'
+                            cur_freq[core_index] = little_max_freq
+                            bigLITTLE_switch_cpu_list[core_index] = (new_cpu, old_cpu)
+
+                        switching_cpu_index += 1
+						
             #Current Core is LITTLE core (change)
-            if core_type == 'LITTLE_core':
+            if core_type[core_index] == 'LITTLE_core':
                 #Cycle Statistics
                 for idx in range(12):
-                    if Llittle_freq_list[idx][0] == cur_freq:
-                        Llittle_freq_list[idx][1] += quantum_total_cycles
+                    if Llittle_freq_list[12*core_index+idx][0] == cur_freq[core_index]:
+                        Llittle_freq_list[12*core_index+idx][1] += quantum_total_cycles
 				#Frequency up-scaling 
-                if core_utilization >= freq_up_thresh and cur_freq != little_max_freq:
-                    cur_freq += 100
+                if core_utilization >= freq_up_thresh and cur_freq[core_index] != little_max_freq:
+                    cur_freq[core_index] += 100
                 #Frequency down-scaling          
-                elif core_utilization < freq_down_thresh and cur_freq != little_min_freq:
-                    cur_freq -= 100
+                elif core_utilization < freq_down_thresh and cur_freq[core_index] != little_min_freq:
+                    cur_freq[core_index] -= 100
                 #Core switching
-                elif core_utilization >= freq_up_thresh and cur_freq == little_max_freq:
-                    m5.switchCpus(testsys, bigLITTLE_switch_cpu_list)
-                    core_type = 'big_core'
-                    cur_freq = big_min_freq
-                    tmp_cpu_list = []
+                elif core_utilization >= freq_up_thresh and cur_freq[core_index] == little_max_freq:
+                    print "Core Switch: LITTLE --> big"
+                    switching_cpu_list = []
+                    switching_cpu_index = 0
                     for old_cpu, new_cpu in bigLITTLE_switch_cpu_list:
-                        tmp_cpu_list.append((new_cpu, old_cpu))
-                    bigLITTLE_switch_cpu_list = tmp_cpu_list
-            
-            #print "Core Type: %s, Freq: %d" % (old_cpu, cur_freq)	
-			
-		#Switch between 'Simulated system' and (old_cpu, new_cpu) tuples
-	    #m5.switchCpus(testsys, bigLITTLE_switch_cpu_list)
-      
-        #print "frequency: %d" % (m5.getCurFreq())
- 
-		#Modify 'bigLITTLE_switch_cpu_list' with switched tuples
-        #tmp_cpu_list = []
-        #for old_cpu, new_cpu in bigLITTLE_switch_cpu_list:
-        #    tmp_cpu_list.append((new_cpu, old_cpu))
-        #bigLITTLE_switch_cpu_list = tmp_cpu_list
+                        if switching_cpu_index == core_index:
+                            switching_cpu_list.append((old_cpu, new_cpu))
+
+                            m5.switchCpus(testsys, switching_cpu_list)
+                            core_type[core_index] = 'big_core'
+                            cur_freq[core_index] = big_min_freq
+                            bigLITTLE_switch_cpu_list[core_index] = (new_cpu, old_cpu)						
+
+                        switching_cpu_index += 1
+		
+		    #Update for loop index
+            core_index += 1
 
         #Simulate last quantum and exit the simulation loop
         if (maxtick - m5.curTick()) <= switch_freq:            
             exit_event = m5.simulate(maxtick - m5.curTick())
-            print "big Core DVFS Stat."
-            for idx in range(14):
-                print "%dMHz: %d" % (big_freq_list[idx][0], big_freq_list[idx][1])
-            print "LITTLE Core DVFS Stat."
-            for idx in range(12):
-                print "%dMHz: %d" % (Llittle_freq_list[idx][0], Llittle_freq_list[idx][1])	
+            #print "big Core DVFS Stat."
+            #for idx in range(14):
+            #    print "%dMHz: %d" % (big_freq_list[idx][0], big_freq_list[idx][1])
+            #print "LITTLE Core DVFS Stat."
+            #for idx in range(12):
+            #    print "%dMHz: %d" % (Llittle_freq_list[idx][0], Llittle_freq_list[idx][1])	
             return exit_event	
 
 def repeatSwitch(testsys, repeat_switch_cpu_list, maxtick, switch_freq):
@@ -625,38 +639,6 @@ def run(options, root, testsys, cpu_class):
 
         testsys.switch_cpus = switch_cpus
         switch_cpu_list = [(testsys.cpu[i], switch_cpus[i]) for i in xrange(np)]
-	
-    #Operations for 'big.LITTLE Switch'
-    #if options.bigLITTLE_switch:
-	#    #Define big cores
-    #    big_switch_cpus = [DerivO3CPU(switched_out=False, cpu_id=(i))
-    #                   for i in xrange(np)]
-	#	#Define LITTLE cores
-    #    LITTLE_switch_cpus = [MinorCPU(switched_out=True, cpu_id=(i))
-    #                    for i in xrange(np)]
-	#    
-	#	#Set system, workload, clk_domain environments for each cpu type
-    #    for i in xrange(np):
-    #        big_switch_cpus[i].system =  testsys
-    #        LITTLE_switch_cpus[i].system =  testsys
-    #        big_switch_cpus[i].workload = testsys.cpu[i].workload
-    #        LITTLE_switch_cpus[i].workload = testsys.cpu[i].workload
-    #        big_switch_cpus[i].clk_domain = testsys.cpu[i].clk_domain
-    #        LITTLE_switch_cpus[i].clk_domain = testsys.cpu[i].clk_domain
-	#	    
-	#		#Max instruction of simulation
-    #        if options.maxinsts:
-    #            big_switch_cpus[i].max_insts_any_thread = options.maxinsts
-    #            LITTLE_switch_cpus[i].max_insts_any_thread = options.maxinsts
-    #
-    #        if options.checker:
-    #            big_switch_cpus[i].addCheckerCpu()
-    #            LITTLE_switch_cpus[i].addCheckerCpu()
-	#	
-    #    testsys.big_switch_cpus = big_switch_cpus
-    #    testsys.LITTLE_switch_cpus = LITTLE_switch_cpus
-    #    
-    #    bigLITTLE_switch_cpu_list = [(big_switch_cpus[i], LITTLE_switch_cpus[i]) for i in xrange(np)]
 
     #Operations for 'big.LITTLE Switch'
     if options.bigLITTLE_switch:
@@ -683,7 +665,16 @@ def run(options, root, testsys, cpu_class):
                                       for i in xrange(np)]
         else:
             bigLITTLE_switch_cpu_list = [(testsys.cpu[i], LITTLE_switch_cpus[i])
-                                      for i in xrange(np)]		
+                                      for i in xrange(np)]	
+  
+        #Set CPU ID for each core type - JIP
+        #for i in xrange(np):
+        #    if cpu_class:
+        #        switch_cpus[i].setCpuID(i)
+        #        LITTLE_switch_cpus[i].setCpuID(i)
+        #    else:
+        #        testsys.cpu[i].setCpuID(i)
+        #        LITTLE_switch_cpus[i].setCpuID(i)
 		
     if options.repeat_switch:
         switch_class = getCPUClass(options.cpu_type)[0]
@@ -903,7 +894,7 @@ def run(options, root, testsys, cpu_class):
 		#Operations for 'big.LITTLE Switch'
         if options.bigLITTLE_switch and maxtick > options.bigLITTLE_switch:
 		    exit_event = bigLITTLESwitch(testsys, bigLITTLE_switch_cpu_list,
-                                      maxtick, options.bigLITTLE_switch, options.cpu_clock)
+                                      maxtick, options.bigLITTLE_switch, np)
 		
         elif options.repeat_switch and maxtick > options.repeat_switch:
             exit_event = repeatSwitch(testsys, repeat_switch_cpu_list,

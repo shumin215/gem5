@@ -47,12 +47,15 @@ namespace SimClock {
 Tick Frequency;
 
 //JIP: big core
-double numBusyCycles;
-double numIdleCycles;
+double numBusyCycles[4];
+double numIdleCycles[4];
 
 //JIP: LITTLE core
-double tickCycles;
-double numCycles;
+double tickCycles[4];
+double numCycles[4];
+
+double temp_tickCycles;
+double temp_numCycles;
 
 namespace Float {
 double s;
@@ -145,18 +148,18 @@ double getCurFreq()
 	return SimClock::Frequency;
 }
 
-double getCurBusyCycles(int i)
+double getCurBusyCycles(int i, int j)
 {
 	if (i == 0)
-		return SimClock::numBusyCycles;
+		return SimClock::numBusyCycles[j];
 	else
-		return SimClock::numCycles;
+		return SimClock::numCycles[0];
 }
 
-double getCurIdleCycles(int i)
+double getCurIdleCycles(int i, int j)
 {
 	if (i == 0)
-		return SimClock::numIdleCycles;
+		return SimClock::numIdleCycles[j];
 	else
-		return SimClock::tickCycles;
+		return SimClock::tickCycles[0];
 }

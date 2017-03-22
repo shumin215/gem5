@@ -546,7 +546,7 @@ FullO3CPU<Impl>::tick()
     ++numCycles;
 	
 	using namespace SimClock;
-	numBusyCycles++;
+	numBusyCycles[index_cpu]++;
 
     ppCycles->notify(1);
 
@@ -1173,6 +1173,16 @@ FullO3CPU<Impl>::switchOut()
         checker->switchOut();
 }
 
+//big.LITTLE implementation - JIP
+template <class Impl>
+void
+FullO3CPU<Impl>::setCpuIndex(int i)
+{
+    DPRINTF(O3CPU, "Set CPU Index: %d\n", i);
+    
+	index_cpu = i;
+}
+
 template <class Impl>
 void
 FullO3CPU<Impl>::takeOverFrom(BaseCPU *oldCPU)
@@ -1639,8 +1649,8 @@ FullO3CPU<Impl>::wakeCPU()
 		using namespace SimClock;
 
 		//JIP: big.LITTLE
-		numIdleCycles += cycles;
-		numBusyCycles += cycles;
+		numIdleCycles[index_cpu] += cycles;
+		numBusyCycles[index_cpu] += cycles;
 
         ppCycles->notify(cycles);
     }

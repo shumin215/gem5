@@ -161,3 +161,6 @@ class DerivO3CPU(BaseCPU):
         else:
             print "ERROR: Checker only supported under ARM ISA!"
             exit(1)
+
+    def setCpuID(self, index):
+        self.index_cpu = index;

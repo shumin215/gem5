@@ -324,7 +324,12 @@ class BaseCPU : public MemObject
      * takeOverFrom() on the new CPU with this CPU as its parameter.
      */
     virtual void switchOut();
+	
+	
+	/* big.LITTLE implementation - JIP */
+	virtual void setCpuIndex(int i);
 
+	
     /**
      * Load the state of a CPU from the previous CPU object, invoked
      * on all new CPUs that are about to be switched in.

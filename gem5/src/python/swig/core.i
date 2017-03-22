@@ -90,8 +90,8 @@ class Checkpoint;
 
 /* JIP: big.LITTLE */
 double getCurFreq();
-double getCurBusyCycles(int i);
-double getCurIdleCycles(int i);
+double getCurBusyCycles(int i, int j);
+double getCurIdleCycles(int i, int j);
 
 void serializeAll(const std::string &cpt_dir);
 CheckpointIn *getCheckpoint(const std::string &cpt_dir);

@@ -65,6 +65,7 @@ class Ticked : public Serializable
     class ClockEvent : public Event
     {
       public:
+	  
         Ticked &owner;
 
         ClockEvent(Ticked &owner_, Priority priority) :
@@ -87,8 +88,8 @@ class Ticked : public Serializable
             }
 			
 			/* JIP: big.LITTLE */
-			++SimClock::tickCycles;
-			++SimClock::numCycles;
+			++SimClock::tickCycles[0];
+			++SimClock::numCycles[0];
         }
     };
 
@@ -121,6 +122,7 @@ class Ticked : public Serializable
     Stats::Formula idleCycles;
 
   public:
+  
     Ticked(ClockedObject &object_,
         Stats::Scalar *imported_num_cycles = NULL,
         Event::Priority priority = Event::CPU_Tick_Pri);
@@ -143,7 +145,7 @@ class Ticked : public Serializable
             countCycles(cyclesSinceLastStopped());
 			
 			/* JIP: big.LITTLE */
-			SimClock::numCycles += cyclesSinceLastStopped();
+			SimClock::numCycles[0] += cyclesSinceLastStopped();
         }
     }
 

@@ -176,10 +176,24 @@ def simulate(*args, **kwargs):
 #JIP:big.LITTLE
 def getCurFreq():
     return _m5.core.getCurFreq()
-def getCurBusyCycles(i):
-    return _m5.core.getCurBusyCycles(i)
-def getCurIdleCycles(i):
-    return _m5.core.getCurIdleCycles(i)
+def getCurBusyCycles(i, j):
+    return _m5.core.getCurBusyCycles(i, j)
+def getCurIdleCycles(i, j):
+    return _m5.core.getCurIdleCycles(i, j)
+	
+def setCpuIndex(cpuList): 
+    if not isinstance(cpuList, list):
+        raise RuntimeError, "Must pass a list to this function"
+    for item in cpuList:
+        if not isinstance(item, tuple) or len(item) != 2:
+            raise RuntimeError, "List must have tuples of (oldCPU,newCPU)"
+
+    cpu_index = 0
+			
+    for old_cpu, new_cpu in cpuList:
+        old_cpu.setCpuIndex(cpu_index)
+        new_cpu.setCpuIndex(cpu_index)
+        cpu_index += 1
 	
 def drain():
     """Drain the simulator in preparation of a checkpoint or memory mode

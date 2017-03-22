@@ -264,6 +264,15 @@ MinorCPU::switchOut()
     activityRecorder->reset();
 }
 
+//big.LITTLE implementation - JIP
+void
+MinorCPU::setCpuIndex(int i)
+{
+    DPRINTF(MinorCPU, "Set CPU Index: %d\n", i);
+    
+	index_cpu = i;
+}
+
 void
 MinorCPU::takeOverFrom(BaseCPU *old_cpu)
 {

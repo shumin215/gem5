@@ -361,9 +361,12 @@ class FullO3CPU : public BaseO3CPU
      * to squash uncommitted instructions to fully drain the pipeline.
      */
     void commitDrained(ThreadID tid);
-
+	
     /** Switches out this CPU. */
     void switchOut() override;
+	
+	/* big.LITTLE implementation - JIP */
+	void setCpuIndex(int i);
 
     /** Takes over from another CPU. */
     void takeOverFrom(BaseCPU *oldCPU) override;
@@ -638,6 +641,10 @@ class FullO3CPU : public BaseO3CPU
     ThreadID getFreeTid();
 
   public:
+
+	/** big.LITTLE implementation - JIP **/	
+	int index_cpu;
+
     /** Returns a pointer to a thread context. */
     ThreadContext *
     tcBase(ThreadID tid)
