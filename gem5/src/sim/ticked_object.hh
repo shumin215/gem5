@@ -86,10 +86,6 @@ class Ticked : public Serializable
                 owner.object.schedule(this,
                     owner.object.clockEdge(Cycles(1)));
             }
-			
-			/* JIP: big.LITTLE */
-			++SimClock::tickCycles[0];
-			++SimClock::numCycles[0];
         }
     };
 
@@ -145,8 +141,13 @@ class Ticked : public Serializable
             countCycles(cyclesSinceLastStopped());
 			
 			/* JIP: big.LITTLE */
-			SimClock::numCycles[0] += cyclesSinceLastStopped();
+			SimClock::temp_numCycles = cyclesSinceLastStopped();
         }
+		
+		/* JIP: big.LITTLE */
+		else
+			SimClock::temp_numCycles = 0;
+		
     }
 
     /** How long have we been stopped for? */

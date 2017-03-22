@@ -318,6 +318,9 @@ MinorCPU::wakeupOnEvent(unsigned int stage_id)
     /* Mark that some activity has taken place and start the pipeline */
     activityRecorder->activateStage(stage_id);
     pipeline->start();
+	
+	/* JIP: big.LITTLE */
+	SimClock::numCycles[index_cpu] += SimClock::temp_numCycles;
 }
 
 MinorCPU *

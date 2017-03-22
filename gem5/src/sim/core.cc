@@ -153,7 +153,7 @@ double getCurBusyCycles(int i, int j)
 	if (i == 0)
 		return SimClock::numBusyCycles[j];
 	else
-		return SimClock::numCycles[0];
+		return SimClock::numCycles[j];
 }
 
 double getCurIdleCycles(int i, int j)
@@ -161,5 +161,5 @@ double getCurIdleCycles(int i, int j)
 	if (i == 0)
 		return SimClock::numIdleCycles[j];
 	else
-		return SimClock::tickCycles[0];
+		return SimClock::tickCycles[j];
 }

@@ -440,18 +440,20 @@ def bigLITTLESwitch(testsys, bigLITTLE_switch_cpu_list, maxtick, switch_freq, nu
 	
     while True:
 	    #Simulate target architecture during 'switch_freq'
-        print "Running big.LITTLE cluster"
+        #print "Running big.LITTLE cluster"
         exit_event = m5.simulate(switch_freq)
         exit_cause = exit_event.getCause()
 		
 		#If the simulation is end with other reason, print simulation cycles and exit the simulation loop
         if exit_cause != "simulate() limit reached":
-            #print "big Core DVFS Stat."
-            #for idx in range(14):
-            #    print "%dMHz: %d" % (big_freq_list[idx][0], big_freq_list[idx][1])
-            #print "LITTLE Core DVFS Stat."
-            #for idx in range(12):
-            #    print "%dMHz: %d" % (Llittle_freq_list[idx][0], Llittle_freq_list[idx][1])	
+            for cpu_idx in range(num_cpu):
+                print "big Core %d DVFS Stat." % (cpu_idx)
+                for idx in range(14):
+                    print "%dMHz: %d" % (big_freq_list[idx+14*cpu_idx][0], big_freq_list[idx+14*cpu_idx][1])
+                print "LITTLE Core %d DVFS Stat." % (cpu_idx)
+                for idx in range(12):
+                    print "%dMHz: %d" % (Llittle_freq_list[idx+12*cpu_idx][0], Llittle_freq_list[idx+12*cpu_idx][1])	
+            
             return exit_event
 		
         #To access for loop index
@@ -485,7 +487,7 @@ def bigLITTLESwitch(testsys, bigLITTLE_switch_cpu_list, maxtick, switch_freq, nu
 
                 #print  "%lf, %lf" & (old_cpu.idleCycles, old_cpu.tickCycles)
 				
-            print "Core %d Type: %s, quantum_total_cycles: %lf, quantum_idle_cycles: %lf" % (core_index, core_type[core_index], quantum_total_cycles, quantum_idle_cycles)
+            #print "Core %d Type: %s, quantum_total_cycles: %lf, quantum_idle_cycles: %lf" % (core_index, core_type[core_index], quantum_total_cycles, quantum_idle_cycles)
             
 			
             #Calculate core utilization
@@ -506,7 +508,7 @@ def bigLITTLESwitch(testsys, bigLITTLE_switch_cpu_list, maxtick, switch_freq, nu
                     cur_freq[core_index] -= 100
                 #Core switching
                 elif core_utilization < freq_down_thresh and cur_freq[core_index] == big_min_freq:
-                    print "Core %d Switch: big --> LITTLE" % (core_index)
+                    #print "Core %d Switch: big --> LITTLE" % (core_index)
                     switching_cpu_list = []
                     switching_cpu_index = 0
                     for old_cpu, new_cpu in bigLITTLE_switch_cpu_list:
@@ -534,7 +536,7 @@ def bigLITTLESwitch(testsys, bigLITTLE_switch_cpu_list, maxtick, switch_freq, nu
                     cur_freq[core_index] -= 100
                 #Core switching
                 elif core_utilization >= freq_up_thresh and cur_freq[core_index] == little_max_freq:
-                    print "Core Switch: LITTLE --> big"
+                    #print "Core Switch: LITTLE --> big"
                     switching_cpu_list = []
                     switching_cpu_index = 0
                     for old_cpu, new_cpu in bigLITTLE_switch_cpu_list:
@@ -554,12 +556,14 @@ def bigLITTLESwitch(testsys, bigLITTLE_switch_cpu_list, maxtick, switch_freq, nu
         #Simulate last quantum and exit the simulation loop
         if (maxtick - m5.curTick()) <= switch_freq:            
             exit_event = m5.simulate(maxtick - m5.curTick())
-            #print "big Core DVFS Stat."
-            #for idx in range(14):
-            #    print "%dMHz: %d" % (big_freq_list[idx][0], big_freq_list[idx][1])
-            #print "LITTLE Core DVFS Stat."
-            #for idx in range(12):
-            #    print "%dMHz: %d" % (Llittle_freq_list[idx][0], Llittle_freq_list[idx][1])	
+            for cpu_idx in range(num_cpu):
+                print "big Core %d DVFS Stat." % (cpu_idx)
+                for idx in range(14):
+                    print "%dMHz: %d" % (big_freq_list[idx+14*cpu_idx][0], big_freq_list[idx+14*cpu_idx][1])
+                print "LITTLE Core %d DVFS Stat." % (cpu_idx)
+                for idx in range(12):
+                    print "%dMHz: %d" % (Llittle_freq_list[idx+12*cpu_idx][0], Llittle_freq_list[idx+12*cpu_idx][1])
+            
             return exit_event	
 
 def repeatSwitch(testsys, repeat_switch_cpu_list, maxtick, switch_freq):
