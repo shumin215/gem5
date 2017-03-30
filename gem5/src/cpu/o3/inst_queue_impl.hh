@@ -1215,6 +1215,14 @@ InstructionQueue<Impl>::doSquash(ThreadID tid)
                  !squashed_inst->isMemBarrier() &&
                  !squashed_inst->isWriteBarrier())) {
 
+			/************************************************************
+			 If an instruction is not executed in IXU don't remove it from 
+			 the dependency graph, because instruction executed in IXU is not added 
+			 to dependency graph
+			***************************************************************/
+				if(squashed_inst->isExecInIXU != true)
+				{
+
                 for (int src_reg_idx = 0;
                      src_reg_idx < squashed_inst->numSrcRegs();
                      src_reg_idx++)
@@ -1239,6 +1247,8 @@ InstructionQueue<Impl>::doSquash(ThreadID tid)
 
                     ++iqSquashedOperandsExamined;
                 }
+
+				}
             } else if (!squashed_inst->isStoreConditional() ||
                        !squashed_inst->isCompleted()) {
                 NonSpecMapIt ns_inst_it =
@@ -1569,6 +1579,14 @@ InstructionQueue<Impl>::dumpInsts()
         inst_list_it++;
         ++num;
     }
+}
+
+template <typename Impl>
+void InstructionQueue<Impl>::insertFromIXU(DynInstPtr &inst)
+{
+	assert(inst);
+
+    instList[inst->threadNumber].push_back(inst);
 }
 
 #endif//__CPU_O3_INST_QUEUE_IMPL_HH__

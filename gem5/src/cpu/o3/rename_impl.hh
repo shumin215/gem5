@@ -1152,7 +1152,10 @@ DefaultRename<Impl>::calcFreeROBEntries(ThreadID tid)
     int num_free = freeEntries[tid].robEntries -
                   (instsInProgress[tid] - fromIEW->iewInfo[tid].dispatched);
 
-    //DPRINTF(Rename,"[tid:%i]: %i rob free\n",tid,num_free);
+	DPRINTF(Rename, "calcFreeROBEntires: free robEntries: %d, instsInProgress: %d, "
+			"dispatched Insts: %d\n", freeEntries[tid].robEntries, instsInProgress[tid],
+			fromIEW->iewInfo[tid].dispatched);
+    DPRINTF(Rename,"[tid:%i]: %i rob free\n",tid,num_free);
 
     return num_free;
 }
@@ -1164,7 +1167,10 @@ DefaultRename<Impl>::calcFreeIQEntries(ThreadID tid)
     int num_free = freeEntries[tid].iqEntries -
                   (instsInProgress[tid] - fromIEW->iewInfo[tid].dispatched);
 
-    //DPRINTF(Rename,"[tid:%i]: %i iq free\n",tid,num_free);
+	DPRINTF(Rename, "calcFreeIQEntires: free iqEntries: %d, instsInProgress: %d, "
+			"dispatched Insts: %d\n", freeEntries[tid].iqEntries, instsInProgress[tid],
+			fromIEW->iewInfo[tid].dispatched);
+	DPRINTF(Rename,"[tid:%i]: %i iq free\n",tid,num_free);
 
     return num_free;
 }

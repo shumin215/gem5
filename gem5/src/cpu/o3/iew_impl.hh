@@ -63,6 +63,7 @@
 #include "params/DerivO3CPU.hh"
 
 #define HISTORY_TABLE_SIZE 1000
+#define IXU_DEPTH 3
 
 using namespace std;
 
@@ -97,6 +98,9 @@ DefaultIEW<Impl>::DefaultIEW(O3CPU *_cpu, DerivO3CPUParams *params)
     _status = Active;
     exeStatus = Running;
     wbStatus = Idle;
+
+	/* Set IXU flag */
+	isIXUUsed = true;
 
 	/* Initialize IXU history table */
 	IXU_history_table = new IXU_history_entries*[HISTORY_TABLE_SIZE];
@@ -224,7 +228,13 @@ DefaultIEW<Impl>::regStats()
     iewExecutedInsts
         .name(name() + ".iewExecutedInsts")
         .desc("Number of executed instructions");
+	/****************** IXU Structure ***********************/
 
+    ixuEnteredInsts
+        .name(name() + ".ixuEnteredInsts")
+        .desc("Number of instructions entered into IXU");
+
+	/*******************************************************/
     iewExecLoadInsts
         .init(cpu->numThreads)
         .name(name() + ".iewExecLoadInsts")
@@ -632,7 +642,7 @@ DefaultIEW<Impl>::instToCommit(DynInstPtr &inst)
         }
     }
 
-    DPRINTF(IEW, "Current wb cycle: %i, width: %i, numInst: %i\nwbActual:%i\n",
+    DPRINTF(IEW, "Current wb cycle: %i, width: %i, numInst: %i, wbActual:%i\n",
             wbCycle, wbWidth, wbNumInst, wbCycle * wbWidth + wbNumInst);
     // Add finished instruction to queue to commit.
     (*iewQueue)[wbCycle].insts[wbNumInst] = inst;
@@ -971,6 +981,9 @@ DefaultIEW<Impl>::dispatchInsts(ThreadID tid)
     bool add_to_iq = false;
     int dis_num_inst = 0;
 
+	/* Update IHT (IXU History Table) on every cycle */
+	updateIHTBeforeDispatch();
+
     // Loop through the instructions, putting them in the instruction
     // queue.
     for ( ; dis_num_inst < insts_to_add &&
@@ -1026,27 +1039,62 @@ DefaultIEW<Impl>::dispatchInsts(ThreadID tid)
 	 *
 	 * *******************************************************/
 
+		if(isIXUUsed == true)
+		{
+			/* dmb instruction can't be handled in IXU */
+		if (!inst->isMemBarrier() && !inst->isWriteBarrier() && !inst->isNonSpeculative())
+		{
 		/* check if an instruction is not memory instruction 
 		 * or has one operation latency */
-		if(!inst->isMemRef() && getLatency(inst) == 1)
+		if(!inst->isMemRef() && !inst->isLoad() 
+				&& !inst->isStore() && getLatency(inst) == 1)
 		{
 			/* check an instruction can enter IXU */
 			if(canInstEnterIXU(inst))
 			{
+				ixuEnteredInsts++;
+
 				/* Updates dest regs of instruction in IHT */
 				setDestRegInIHT(inst);
 
-				DPRINTF(IEW, "[tid:%i]: IXU-Issue: instruction is moved to IXU. \n", tid);
+				DPRINTF(IEW, "[tid:%i]: IXU: instruction is moved to IXU. [sn:%i]\n"
+						, tid, inst->seqNum);
+
+				/* this is for committing an instruction */
+				instQueue.insertFromIXU(inst);
 
 				/* Insert instruction to buffer in IXU */
 				buffer_of_ixu[0].push_back(inst);
 				insts_to_dispatch.pop();
 
+				/* signal to rename stage */
+        		toRename->iewInfo[tid].dispatched++;
+
+        		ppDispatch->notify(inst);
+
 				continue;
+			}
+			else
+			{
+				DPRINTF(IEW, "[tid:%i]: IXU: instruction is moved to OXU. [sn:%i]\n",
+						tid, inst->seqNum);
 			}
 			/* If an instruction can't enter IXU, just go to OXU */
 		}
+		else
+		{
+			DPRINTF(IEW, "[tid:%i]: IXU: instruction is moved to OXU. [sn:%i]\n",
+					tid, inst->seqNum);
+		}
 
+		} // MemBarrier & WriteBarrier
+		else
+		{
+			DPRINTF(IEW, "[tid:%i]: an instruction is MemBarrier or WriteBarrier. [sn:%i]\n",
+					tid, inst->seqNum);
+		}
+
+		}
 	/********************************************************/
 
         // Check for full conditions.
@@ -1110,6 +1158,8 @@ DefaultIEW<Impl>::dispatchInsts(ThreadID tid)
                 // so that commit can process them when they reach the
                 // head of commit.
                 // @todo: This is somewhat specific to Alpha.
+				DPRINTF(IEW, "Issue: Store instruction is conditional. [sn:%i]",
+						inst->seqNum);
                 inst->setCanCommit();
                 instQueue.insertNonSpec(inst);
                 add_to_iq = false;
@@ -1233,25 +1283,27 @@ DefaultIEW<Impl>::executeInsts()
 	 *
 	 *  IXU is operated right here
 	 *
-	 *  buf_idx:2 -> Last stage
-	 *  buf_idx:1 -> 2nd stage
-	 *  buf_idx:0 -> 1st stage
+	 *  buf_idx:3 -> Last stage
+	 *  buf_idx:2 -> 2nd stage
+	 *  buf_idx:1 -> 1st stage
 	 *
 	 * *****************************************************/
 
+	if(isIXUUsed == true)
+	{
 	/* Through buffers in IXU, updates instruction's status */
 	updateInstInIXUBuffer();
 
 	/* 1. Data is fetched from buffer of 3rd stage */
-	for(int buf_idx = 2; buf_idx >= 0; buf_idx--)
+	for(int buf_idx = IXU_DEPTH; buf_idx >= 1; buf_idx--)
 	{
 		int num_of_insts_ixu_buffer = buffer_of_ixu[buf_idx].size();
 
-		if(num_of_insts_ixu_buffer > 3)
+		if(num_of_insts_ixu_buffer > IXU_DEPTH)
 		{
 			DPRINTF(IEW, "IXU: Buffer size of 3rd stage is exceeded.\n");
 
-			assert(num_of_insts_ixu_buffer <= 3);
+			assert(num_of_insts_ixu_buffer <= IXU_DEPTH);
 		}
 
 		for(int idx = 0; idx < num_of_insts_ixu_buffer; idx++)
@@ -1278,6 +1330,9 @@ DefaultIEW<Impl>::executeInsts()
 				inst->setCanCommit();
 
 				buffer_of_ixu[buf_idx].pop_front();
+
+				/* Reset IHT's left cycle to -1 */
+				resetIHTatSquash(inst);
 				continue;
 			}
 
@@ -1287,6 +1342,8 @@ DefaultIEW<Impl>::executeInsts()
 			{
 				if(inst->getFault() == NoFault)
 				{
+					DPRINTF(IEW, "IXU: Instruction is executed in %dth stage. "
+							" [sn:%i]\n", buf_idx, inst->seqNum);
 					inst->execute();
 
 					if(!inst->readPredicate())
@@ -1295,32 +1352,60 @@ DefaultIEW<Impl>::executeInsts()
 
 				inst->setExecuted();
 				instToCommit(inst);
-
-//				updateIHTAfterExec(inst);
 			}
 			/* If an instruction can't be executed at last IXU satge, 
 			 * it'll cause problems */
 			else
 			{
-				DPRINTF(IEW, "IXU: ***There is still left instruction that is not executed"
-						"in IXU.***\n");
+				DPRINTF(IEW, "IXU: ***There is still left instruction that is not"
+						"executed in IXU.***\n");
 			}
 
 			updateExeInstStats(inst);
+
+			ThreadID tid = inst->threadNumber;
+			/* Check if branch instruction wasn't correct 
+			 * we have to tell commit to squash in flight instructions */
+			if(!fetchRedirect[tid] || !toCommit->squash[tid])
+			{
+				if(inst->mispredicted())
+				{
+					fetchRedirect[tid] = true;
+
+					DPRINTF(IEW, "IXU: Branch mispredict detected.\n");
+					DPRINTF(IEW, "Predicted target was PC: %s.\n",
+							inst->readPredTarg());
+					DPRINTF(IEW, "Execute: Redirecting fetch to PC: %s.\n",
+							inst->pcState());
+
+					squashDueToBranch(inst, tid);
+
+					ppMispredict->notify(inst);
+
+					if(inst->readPredTaken())
+						predictedTakenIncorrect++;
+					else
+						predictedNotTakenIncorrect++;
+				}
+			}
+
 			buffer_of_ixu[buf_idx].pop_front();
 
 			/* Not executed instructions is lifted to next IXU stage 
 			 * except for 3rd IXU stage */
-			if(buf_idx != 2 && !inst->isExecuted())
+			if(buf_idx != 3 && !inst->isExecuted())
 			{
+				DPRINTF(IEW, "IXU: Instruction can't be executed in %dth stage, so "
+				"moved to %dth stage's buffer. [sn:%i]\n", buf_idx, buf_idx+1, inst->seqNum);
 				buffer_of_ixu[buf_idx+1].push_back(inst);
-
-			/* Update scoreboard and set 'CanIssue' flag in each instruction */
-
 			}
 		}
 	}
 
+	/* Move instruction from temp buffer[0] to buffer[1] */
+	moveInstsToBuffer();
+
+	}
 	/*********************************************************/
 
     // Uncomment this if you want to see all available instructions.
@@ -1407,6 +1492,7 @@ DefaultIEW<Impl>::executeInsts()
                 // If the store had a fault then it may not have a mem req
                 if (fault != NoFault || !inst->readPredicate() ||
                         !inst->isStoreConditional()) {
+					DPRINTF(IEW, "Store instruction is fault. [sn:%i]\n", inst->seqNum);
                     // If the instruction faulted, then we need to send it along
                     // to commit without the instruction completing.
                     // Send this instruction to commit, also make sure iew stage
@@ -1574,6 +1660,9 @@ DefaultIEW<Impl>::writebackInsts()
                 scoreboard->setReg(inst->renamedDestRegIdx(i));
             }
 
+			if(isIXUUsed == true)
+			{
+
 			if(!isExecutedInIXU(inst))
 			{
 				int dependents = instQueue.wakeDependents(inst);
@@ -1585,7 +1674,25 @@ DefaultIEW<Impl>::writebackInsts()
 			}
 			else
 			{
+				int dependents = instQueue.wakeDependents(inst);
+
+				if (dependents) {
+					producerInst[tid]++;
+					consumerInst[tid]+= dependents;
+				}
+
 				updateIHTAfterExec(inst);
+			}
+
+			}
+			else
+			{
+				int dependents = instQueue.wakeDependents(inst);
+
+				if (dependents) {
+					producerInst[tid]++;
+					consumerInst[tid]+= dependents;
+				}
 			}
 
             writebackCount[tid]++;
@@ -1802,6 +1909,7 @@ template <typename Impl>
 void DefaultIEW<Impl>::initializeIHT(IXU_history_entries *_IHT)
 {
 	_IHT->execution_type = OXU;
+	_IHT->left_cycle = -1;
 }
 
 template <typename Impl>
@@ -1829,6 +1937,7 @@ bool DefaultIEW<Impl>::canInstEnterIXU(DynInstPtr &inst)
 	/* 2. instruction can get dependent data by forwarding result 
 	 * of preceeding instruction */
 	int num_of_src_regs = (int)inst->numSrcRegs();
+//	int longest_left_cycle = 0;
 
 	for(int src_idx=0; src_idx<num_of_src_regs; src_idx++)
 	{
@@ -1841,6 +1950,17 @@ bool DefaultIEW<Impl>::canInstEnterIXU(DynInstPtr &inst)
 		/* 2. src reg is not ready, but can get data of src reg in IXU */
 		else if(isAvailableInIXU(src_reg))
 		{
+			/* If left cycle exceeds IXU depth */
+			if(IXU_history_table[src_reg]->left_cycle >= IXU_DEPTH - 1)
+			{
+				return false;
+			}
+//			/* Update longest left cycle in an instruction */
+//			else if(longest_left_cycle < IXU_history_table[src_reg]->left_cycle)
+//			{
+//				longest_left_cycle = IXU_history_table[src_reg]->left_cycle;
+//			}
+
 			continue;
 		}
 		/* 3. src reg is never available when instruction run in IXU */
@@ -1854,14 +1974,50 @@ bool DefaultIEW<Impl>::canInstEnterIXU(DynInstPtr &inst)
 }
 
 template <typename Impl>
+int DefaultIEW<Impl>::getLongestLeftCycle(DynInstPtr &inst)
+{
+	if(inst->readyToIssue())
+	{
+		return -1;
+	}
+
+	int num_of_src_regs = (int)inst->numSrcRegs();
+	int longest_left_cycle = -1;
+
+	for(int src_idx=0; src_idx<num_of_src_regs; src_idx++)
+	{
+		if(inst->isReadySrcRegIdx(src_idx))
+			continue;
+
+		int src_reg = (int)inst->getSrcRegister(src_idx);
+		int src_cycle = IXU_history_table[src_reg]->left_cycle;
+
+		assert(src_cycle <= 2);
+
+		/* Update longest left cycle among src reg requiring result */
+		if(longest_left_cycle < src_cycle)
+		{
+			longest_left_cycle = src_cycle;
+		}
+	}
+
+	return longest_left_cycle;
+}
+
+template <typename Impl>
 void DefaultIEW<Impl>::setDestRegInIHT(DynInstPtr &inst)
 {
 	int num_of_dest_regs = (int)inst->numDestRegs();
 
+	inst->isExecInIXU = true;
+
 	for(int dest_idx = 0; dest_idx<num_of_dest_regs; dest_idx++)
 	{
 		int dest_reg = (int)inst->getDestRegister(dest_idx);
+		assert(IXU_history_table[dest_reg]->execution_type == OXU);
+
 		IXU_history_table[dest_reg]->execution_type = IXU;
+		IXU_history_table[dest_reg]->left_cycle = getLongestLeftCycle(inst) + 1;
 	}
 }
 
@@ -1869,6 +2025,8 @@ template <typename Impl>
 void DefaultIEW<Impl>::updateIHTAfterExec(DynInstPtr &inst)
 {
 	int num_of_dest_regs = (int)inst->numDestRegs();
+
+	inst->isExecInIXU = false;
 
 	for(int dest_idx = 0; dest_idx < num_of_dest_regs; dest_idx++)
 	{
@@ -1904,14 +2062,14 @@ template <typename Impl>
 void DefaultIEW<Impl>::updateInstInIXUBuffer(void)
 {
 	/* Select buffer of which stage */
-	for(int idx=0; idx<3; idx++)
+	for(int idx=1; idx<4; idx++)
 	{
 		int buf_size = buffer_of_ixu[idx].size();
 
 		/* Select instruction in buffer of IXU */
 		for(int buf_idx=0; buf_idx<buf_size; buf_idx++)
 		{
-			DynInstPtr inst = buffer_of_ixu[idx].front();
+			DynInstPtr inst = buffer_of_ixu[idx][buf_idx];
 			bool isIssuable = true;
 			int num_of_src_regs = inst->numSrcRegs();
 
@@ -1924,15 +2082,79 @@ void DefaultIEW<Impl>::updateInstInIXUBuffer(void)
 				if(!scoreboard->getReg(src_reg))
 				{
 					isIssuable = false;
+					DPRINTF(IEW, "IXU: Instruction[sn:%i] is not ready (Src:%d).\n",
+							inst->seqNum, src_reg);
 					break;
 				}
 			}
 
 			if(isIssuable == true)
 			{
+				DPRINTF(IEW, "IXU: Instruction is ready to issue in %dth buffer. [sn:%i]\n",
+						idx, inst->seqNum);
 				inst->setCanIssue();
 			}
 		}
+	}
+}
+
+template <typename Impl>
+void DefaultIEW<Impl>::moveInstsToBuffer(void)
+{
+	int buf_size = buffer_of_ixu[0].size();
+
+	for(int idx=0; idx<buf_size; idx++)
+	{
+		DynInstPtr inst = buffer_of_ixu[0].front();
+
+		DPRINTF(IEW, "IXU: Instruction is moved from 0th buffer to 1st buffer. "
+				" [sn:%i]\n", inst->seqNum);
+
+		buffer_of_ixu[1].push_back(inst);
+		buffer_of_ixu[0].pop_front();
+	}
+}
+
+template <typename Impl>
+void DefaultIEW<Impl>::updateIHTBeforeDispatch(void)
+{
+	/* Select each buffer in front of IXU */
+	for(int buf_idx=1; buf_idx<=3; buf_idx++)
+	{
+		int num_of_insts = buffer_of_ixu[buf_idx].size();
+
+		/* Select each instruction in buffer */
+		for(int idx=0; idx<num_of_insts; idx++)
+		{
+			DynInstPtr inst = buffer_of_ixu[buf_idx][idx];
+			int num_of_dest_reg = inst->numDestRegs();
+
+			/* Select dest reg index in an instruction */
+			for(int reg_idx=0; reg_idx<num_of_dest_reg; reg_idx++)
+			{
+				int dest_reg = inst->getDestRegister(reg_idx);
+
+				if(IXU_history_table[dest_reg]->execution_type == IXU 
+						&& IXU_history_table[dest_reg]->left_cycle >= 0)
+					IXU_history_table[dest_reg]->left_cycle--;
+			}
+		}
+	}
+}
+
+template <typename Impl>
+void DefaultIEW<Impl>::resetIHTatSquash(DynInstPtr &inst)
+{
+	int num_of_dest_regs = (int)inst->numDestRegs();
+
+	inst->isExecInIXU = false;
+
+	for(int dest_idx=0; dest_idx<num_of_dest_regs; dest_idx++)
+	{
+		int dest_reg = inst->getDestRegister(dest_idx);
+
+		IXU_history_table[dest_reg]->execution_type = OXU;
+		IXU_history_table[dest_reg]->left_cycle = -1;
 	}
 }
 

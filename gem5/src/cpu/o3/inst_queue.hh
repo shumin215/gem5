@@ -178,6 +178,9 @@ class InstructionQueue
     /** Inserts a new instruction into the IQ. */
     void insert(DynInstPtr &new_inst);
 
+	/* Insert instruction into instList for commit of IXU */
+	void insertFromIXU(DynInstPtr &inst);
+
     /** Inserts a new, non-speculative instruction into the IQ. */
     void insertNonSpec(DynInstPtr &new_inst);
 

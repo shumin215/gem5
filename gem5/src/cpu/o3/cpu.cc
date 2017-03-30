@@ -1575,6 +1575,8 @@ FullO3CPU<Impl>::cleanUpRemovedInsts()
                 (*removeList.front())->seqNum,
                 (*removeList.front())->pcState());
 
+		/* call destructor of BaseDynInst class 
+		 * it prints destroy print */
         instList.erase(removeList.front());
 
         removeList.pop();

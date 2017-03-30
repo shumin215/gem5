@@ -99,6 +99,9 @@ BaseDynInst<Impl>::initVars()
     instFlags[RecordResult] = true;
     instFlags[Predicate] = true;
 
+	/* This is for IXU instruction */
+	isExecInIXU = false;
+
     lqIdx = -1;
     sqIdx = -1;
 

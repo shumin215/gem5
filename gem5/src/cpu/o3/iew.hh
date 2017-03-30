@@ -318,6 +318,7 @@ class DefaultIEW
 		ExecutionType execution_type; 	
 //		/* if physical register is available to be issued for IXU */
 //		bool available_flag;
+		int left_cycle;
 	};
 
 	/* This is for checking availability of entering IXU about instructions 
@@ -325,7 +326,10 @@ class DefaultIEW
 	IXU_history_entries **IXU_history_table;
 
 	/* Buffer in front of each IXU FU */
-	std::deque<DynInstPtr> buffer_of_ixu[3];
+	std::deque<DynInstPtr> buffer_of_ixu[4];
+
+	/* Update IHT on every cycle */
+	void updateIHTBeforeDispatch(void);
 
 	/* Initialize IHT (IXU History Table */
 	void initializeIHT(IXU_history_entries *_IHT);
@@ -333,11 +337,19 @@ class DefaultIEW
 	/* Update IXU History Table After Execution */
 	void updateIHTAfterExec(DynInstPtr &inst);
 
+	/* Move instruction from temp buffer[0] to buffer[1] */
+	void moveInstsToBuffer(void);
+
 	/* Check an instruction can enter IXU */
 	bool canInstEnterIXU(DynInstPtr &inst);
 
 	/* Check source register index in IXU History Table */
 	bool isAvailableInIXU(int src_reg);
+
+	void resetIHTatSquash(DynInstPtr &inst);
+
+	/* Get longest left cycle among src register requiring the result */
+	int getLongestLeftCycle(DynInstPtr &inst);
 
 	/* Update IXU History Table */
 	void setDestRegInIHT(DynInstPtr &inst);
@@ -418,6 +430,9 @@ class DefaultIEW
     bool updateLSQNextCycle;
 
   private:
+	/* Flag for execution IXU */
+	bool isIXUUsed;
+
     /** Records if there is a fetch redirect on this cycle for each thread. */
     bool fetchRedirect[Impl::MaxThreads];
 
@@ -531,6 +546,9 @@ class DefaultIEW
     Stats::Formula wbRate;
     /** Average number of woken instructions per writeback. */
     Stats::Formula wbFanout;
+
+	/* Number of instructions entered into IXU */
+	Stats::Scalar ixuEnteredInsts;
 };
 
 #endif // __CPU_O3_IEW_HH__

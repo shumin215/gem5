@@ -1035,6 +1035,9 @@ DefaultCommit<Impl>::commitInsts()
 
             if (commit_success) {
                 ++num_committed;
+				DPRINTF(Commit, "Instruction is committed successfully. "
+						"num_committed: %d. [sn:%i]\n", num_committed, head_inst->seqNum);
+
                 statCommittedInstType[tid][head_inst->opClass()]++;
                 ppCommit->notify(head_inst);
 
@@ -1200,6 +1203,8 @@ DefaultCommit<Impl>::commitHead(DynInstPtr &head_inst, unsigned inst_num)
 
         if (iewStage->hasStoresToWB(tid) || inst_num > 0) {
             DPRINTF(Commit, "Stores outstanding, fault must wait.\n");
+			DPRINTF(Commit, "**inst_num: %d. hasStoresToWB: %d. [sn:%i]**\n", 
+					inst_num, iewStage->hasStoresToWB(tid), head_inst->seqNum);
             return false;
         }
 

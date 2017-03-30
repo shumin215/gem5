@@ -241,6 +241,8 @@ class BaseDynInst : public ExecContext, public RefCounted
     /** Store queue index. */
     int16_t sqIdx;
 
+	/* This is for identification of instruction executed in IXU */
+	bool isExecInIXU;
 
     /////////////////////// TLB Miss //////////////////////
     /**
@@ -426,6 +428,7 @@ class BaseDynInst : public ExecContext, public RefCounted
 
 	int getSrcRegister(int idx)
 	{
+		assert(TheISA::MaxInstSrcRegs > idx);
 		return (int)_srcRegIdx[idx];
 	}
 
