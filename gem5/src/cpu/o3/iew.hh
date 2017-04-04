@@ -351,6 +351,9 @@ class DefaultIEW
 	/* Get longest left cycle among src register requiring the result */
 	int getLongestLeftCycle(DynInstPtr &inst);
 
+	/* Writeback instruction in IXU in advance */
+	void writebackInstInIXU(DynInstPtr &inst);
+
 	/* Update IXU History Table */
 	void setDestRegInIHT(DynInstPtr &inst);
 

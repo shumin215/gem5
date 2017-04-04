@@ -881,7 +881,10 @@ FullO3CPU<Impl>::removeThread(ThreadID tid)
     iew.ldstQueue.squash(squash_seq_num, tid);
     commit.rob->squash(squash_seq_num, tid);
 
+	iew.instQueue.setCount(0, tid);
 
+	DPRINTF(O3CPU, "instQueue size: %d. [sn:%i]\n", iew.instQueue.getCount(tid),
+			inst->seqNum);
     assert(iew.instQueue.getCount(tid) == 0);
     assert(iew.ldstQueue.getCount(tid) == 0);
 

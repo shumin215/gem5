@@ -1357,8 +1357,8 @@ DefaultIEW<Impl>::executeInsts()
 			 * it'll cause problems */
 			else
 			{
-				DPRINTF(IEW, "IXU: ***There is still left instruction that is not"
-						"executed in IXU.***\n");
+				DPRINTF(IEW, "IXU: There is still left instruction that is not "
+						"executed in IXU. [sn:%i]\n", inst->seqNum);
 			}
 
 			updateExeInstStats(inst);
@@ -1366,16 +1366,20 @@ DefaultIEW<Impl>::executeInsts()
 			ThreadID tid = inst->threadNumber;
 			/* Check if branch instruction wasn't correct 
 			 * we have to tell commit to squash in flight instructions */
-			if(!fetchRedirect[tid] || !toCommit->squash[tid])
+			if(!fetchRedirect[tid] || !toCommit->squash[tid]
+				|| toCommit->squashedSeqNum[tid] > inst->seqNum)
 			{
-				if(inst->mispredicted())
+            	bool loadNotExecuted_in_IXU = !inst->isExecuted() && inst->isLoad();
+
+				if(inst->mispredicted() && !loadNotExecuted_in_IXU 
+						&& inst->readyToIssue())
 				{
 					fetchRedirect[tid] = true;
 
-					DPRINTF(IEW, "IXU: Branch mispredict detected.\n");
-					DPRINTF(IEW, "Predicted target was PC: %s.\n",
+					DPRINTF(IEW, "IXU: Branch mispredict detected. [sn:%i]\n", inst->seqNum);
+					DPRINTF(IEW, "IXU: Predicted target was PC: %s.\n",
 							inst->readPredTarg());
-					DPRINTF(IEW, "Execute: Redirecting fetch to PC: %s.\n",
+					DPRINTF(IEW, "IXU: Execute: Redirecting fetch to PC: %s.\n",
 							inst->pcState());
 
 					squashDueToBranch(inst, tid);
@@ -1389,7 +1393,20 @@ DefaultIEW<Impl>::executeInsts()
 				}
 			}
 
+			/* Writeback instruction in advance, because some instructions such as
+			 * ldr require writeback and require to make src reg as ready maybe...*/
+			if(inst->isExecuted() && !inst->mispredicted())
+			{
+				writebackInstInIXU(inst);
+			}
+
 			buffer_of_ixu[buf_idx].pop_front();
+
+			if(buf_idx == 3 && !inst->isExecuted())
+			{
+				DPRINTF(IEW, "IXU: there is not executed in 3rd stage. [sn:%i]\n", inst->seqNum);
+				assert(buf_idx != 3 || inst->isExecuted());
+			}
 
 			/* Not executed instructions is lifted to next IXU stage 
 			 * except for 3rd IXU stage */
@@ -1399,7 +1416,9 @@ DefaultIEW<Impl>::executeInsts()
 				"moved to %dth stage's buffer. [sn:%i]\n", buf_idx, buf_idx+1, inst->seqNum);
 				buffer_of_ixu[buf_idx+1].push_back(inst);
 			}
+
 		}
+		
 	}
 
 	/* Move instruction from temp buffer[0] to buffer[1] */
@@ -1663,7 +1682,7 @@ DefaultIEW<Impl>::writebackInsts()
 			if(isIXUUsed == true)
 			{
 
-			if(!isExecutedInIXU(inst))
+			if(inst->isExecInIXU == false)
 			{
 				int dependents = instQueue.wakeDependents(inst);
 
@@ -1674,12 +1693,12 @@ DefaultIEW<Impl>::writebackInsts()
 			}
 			else
 			{
-				int dependents = instQueue.wakeDependents(inst);
-
-				if (dependents) {
-					producerInst[tid]++;
-					consumerInst[tid]+= dependents;
-				}
+//				int dependents = instQueue.wakeDependents(inst);
+//
+//				if (dependents) {
+//					producerInst[tid]++;
+//					consumerInst[tid]+= dependents;
+//				}
 
 				updateIHTAfterExec(inst);
 			}
@@ -2155,6 +2174,18 @@ void DefaultIEW<Impl>::resetIHTatSquash(DynInstPtr &inst)
 
 		IXU_history_table[dest_reg]->execution_type = OXU;
 		IXU_history_table[dest_reg]->left_cycle = -1;
+	}
+}
+
+template <typename Impl>
+void DefaultIEW<Impl>::writebackInstInIXU(DynInstPtr &inst)
+{
+	int dependents = instQueue.wakeDependents(inst);
+    ThreadID tid = inst->threadNumber;
+
+	if (dependents) {
+		producerInst[tid]++;
+		consumerInst[tid]+= dependents;
 	}
 }
 

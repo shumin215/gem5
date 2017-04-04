@@ -1589,4 +1589,10 @@ void InstructionQueue<Impl>::insertFromIXU(DynInstPtr &inst)
     instList[inst->threadNumber].push_back(inst);
 }
 
+template <typename Impl>
+void InstructionQueue<Impl>::setCount(unsigned value, ThreadID tid)
+{
+	this->count[tid] = value;
+}
+
 #endif//__CPU_O3_INST_QUEUE_IMPL_HH__

@@ -130,6 +130,9 @@ class InstructionQueue
     /** Returns the name of the IQ. */
     std::string name() const;
 
+	/* Set inst queue count */
+	void setCount(unsigned value, ThreadID tid);
+
     /** Registers statistics. */
     void regStats();
 
