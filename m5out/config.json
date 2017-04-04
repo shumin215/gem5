@@ -27,10 +27,7 @@
             "slave": {
                 "peer": [
                     "system.system_port", 
-                    "system.cpu.icache.mem_side", 
-                    "system.cpu.dcache.mem_side", 
-                    "system.cpu.itb_walker_cache.mem_side", 
-                    "system.cpu.dtb_walker_cache.mem_side"
+                    "system.l2.mem_side"
                 ], 
                 "role": "SLAVE"
             }, 
@@ -129,6 +126,52 @@
             "type": "SrcClockDomain", 
             "domain_id": -1
         }, 
+        "tol2bus": {
+            "point_of_coherency": false, 
+            "system": "system", 
+            "response_latency": 1, 
+            "cxx_class": "CoherentXBar", 
+            "forward_latency": 0, 
+            "clk_domain": "system.cpu_clk_domain", 
+            "width": 32, 
+            "eventq_index": 0, 
+            "default_p_state": "UNDEFINED", 
+            "p_state_clk_gate_max": 1000000000000, 
+            "master": {
+                "peer": [
+                    "system.l2.cpu_side"
+                ], 
+                "role": "MASTER"
+            }, 
+            "type": "CoherentXBar", 
+            "frontend_latency": 1, 
+            "slave": {
+                "peer": [
+                    "system.cpu.icache.mem_side", 
+                    "system.cpu.dcache.mem_side", 
+                    "system.cpu.itb_walker_cache.mem_side", 
+                    "system.cpu.dtb_walker_cache.mem_side"
+                ], 
+                "role": "SLAVE"
+            }, 
+            "p_state_clk_gate_min": 1000, 
+            "snoop_filter": {
+                "name": "snoop_filter", 
+                "system": "system", 
+                "max_capacity": 8388608, 
+                "eventq_index": 0, 
+                "cxx_class": "SnoopFilter", 
+                "path": "system.tol2bus.snoop_filter", 
+                "type": "SnoopFilter", 
+                "lookup_latency": 0
+            }, 
+            "power_model": null, 
+            "path": "system.tol2bus", 
+            "snoop_response_latency": 1, 
+            "name": "tol2bus", 
+            "p_state_clk_gate_bins": 20, 
+            "use_default_range": false
+        }, 
         "work_end_ckpt_count": 0, 
         "mem_mode": "timing", 
         "name": "system", 
@@ -189,7 +232,7 @@
                         "pid": 100, 
                         "kvmInSE": false, 
                         "cxx_class": "Process", 
-                        "executable": "/home/shumin/LG_Project/gem5/tests/test-progs/hello/bin/arm/linux/hello", 
+                        "executable": "/home/shumin/benchmark/SPEC2006/473.astar/exe/astar_base.arm", 
                         "drivers": [], 
                         "system": "system", 
                         "gid": 100, 
@@ -206,7 +249,8 @@
                         "path": "system.cpu.workload", 
                         "name": "workload", 
                         "cmd": [
-                            "/home/shumin/LG_Project/gem5/tests/test-progs/hello/bin/arm/linux/hello"
+                            "/home/shumin/benchmark/SPEC2006/473.astar/exe/astar_base.arm", 
+                            "/home/shumin/benchmark/SPEC2006/473.astar/data/ref/input/rivers.cfg"
                         ], 
                         "errout": "cerr", 
                         "useArchPT": false, 
@@ -677,7 +721,7 @@
                     "default_p_state": "UNDEFINED", 
                     "p_state_clk_gate_max": 1000000000000, 
                     "mem_side": {
-                        "peer": "system.membus.slave[1]", 
+                        "peer": "system.tol2bus.slave[0]", 
                         "role": "MASTER"
                     }, 
                     "mshrs": 2, 
@@ -725,7 +769,7 @@
                 "fetchBufferSize": 16, 
                 "cacheStorePorts": 200, 
                 "simpoint_start_insts": [], 
-                "max_insts_any_thread": 0, 
+                "max_insts_any_thread": 50000, 
                 "smtROBThreshold": 100, 
                 "numIQEntries": 32, 
                 "branchPred": {
@@ -807,7 +851,7 @@
                     "default_p_state": "UNDEFINED", 
                     "p_state_clk_gate_max": 1000000000000, 
                     "mem_side": {
-                        "peer": "system.membus.slave[4]", 
+                        "peer": "system.tol2bus.slave[3]", 
                         "role": "MASTER"
                     }, 
                     "mshrs": 6, 
@@ -867,7 +911,7 @@
                     "default_p_state": "UNDEFINED", 
                     "p_state_clk_gate_max": 1000000000000, 
                     "mem_side": {
-                        "peer": "system.membus.slave[2]", 
+                        "peer": "system.tol2bus.slave[1]", 
                         "role": "MASTER"
                     }, 
                     "mshrs": 6, 
@@ -932,7 +976,7 @@
                     "default_p_state": "UNDEFINED", 
                     "p_state_clk_gate_max": 1000000000000, 
                     "mem_side": {
-                        "peer": "system.membus.slave[3]", 
+                        "peer": "system.tol2bus.slave[2]", 
                         "role": "MASTER"
                     }, 
                     "mshrs": 6, 
@@ -1120,6 +1164,98 @@
             }
         ], 
         "multi_thread": false, 
+        "l2": {
+            "cpu_side": {
+                "peer": "system.tol2bus.master[0]", 
+                "role": "SLAVE"
+            }, 
+            "clusivity": "mostly_excl", 
+            "prefetcher": {
+                "queue_squash": true, 
+                "on_miss": false, 
+                "tag_prefetch": true, 
+                "cache_snoop": false, 
+                "cxx_class": "StridePrefetcher", 
+                "latency": 1, 
+                "use_master_id": true, 
+                "degree": 8, 
+                "max_conf": 7, 
+                "on_inst": true, 
+                "clk_domain": "system.cpu_clk_domain", 
+                "eventq_index": 0, 
+                "default_p_state": "UNDEFINED", 
+                "p_state_clk_gate_max": 1000000000000, 
+                "on_read": true, 
+                "queue_filter": true, 
+                "start_conf": 4, 
+                "type": "StridePrefetcher", 
+                "p_state_clk_gate_min": 1000, 
+                "on_data": true, 
+                "on_write": true, 
+                "power_model": null, 
+                "sys": "system", 
+                "queue_size": 32, 
+                "path": "system.l2.prefetcher", 
+                "table_assoc": 4, 
+                "table_sets": 16, 
+                "name": "prefetcher", 
+                "p_state_clk_gate_bins": 20, 
+                "min_conf": 0, 
+                "thresh_conf": 4
+            }, 
+            "system": "system", 
+            "write_buffers": 8, 
+            "response_latency": 12, 
+            "cxx_class": "Cache", 
+            "size": 2097152, 
+            "type": "Cache", 
+            "clk_domain": "system.cpu_clk_domain", 
+            "max_miss_count": 0, 
+            "eventq_index": 0, 
+            "default_p_state": "UNDEFINED", 
+            "p_state_clk_gate_max": 1000000000000, 
+            "mem_side": {
+                "peer": "system.membus.slave[1]", 
+                "role": "MASTER"
+            }, 
+            "mshrs": 16, 
+            "writeback_clean": false, 
+            "p_state_clk_gate_min": 1000, 
+            "tags": {
+                "size": 2097152, 
+                "tag_latency": 12, 
+                "name": "tags", 
+                "p_state_clk_gate_min": 1000, 
+                "eventq_index": 0, 
+                "p_state_clk_gate_bins": 20, 
+                "default_p_state": "UNDEFINED", 
+                "clk_domain": "system.cpu_clk_domain", 
+                "power_model": null, 
+                "sequential_access": false, 
+                "assoc": 8, 
+                "cxx_class": "RandomRepl", 
+                "p_state_clk_gate_max": 1000000000000, 
+                "path": "system.l2.tags", 
+                "block_size": 64, 
+                "type": "RandomRepl", 
+                "data_latency": 12
+            }, 
+            "tgts_per_mshr": 8, 
+            "demand_mshr_reserve": 1, 
+            "power_model": null, 
+            "addr_ranges": [
+                "0:18446744073709551615:0:0:0:0"
+            ], 
+            "is_read_only": false, 
+            "prefetch_on_access": true, 
+            "path": "system.l2", 
+            "data_latency": 12, 
+            "tag_latency": 12, 
+            "name": "l2", 
+            "p_state_clk_gate_bins": 20, 
+            "sequential_access": false, 
+            "assoc": 8
+        }, 
         "cpu_voltage_domain": {
             "name": "cpu_voltage_domain", 
             "eventq_index": 0, 

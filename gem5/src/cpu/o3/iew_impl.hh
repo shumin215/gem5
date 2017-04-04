@@ -1063,6 +1063,9 @@ DefaultIEW<Impl>::dispatchInsts(ThreadID tid)
 				/* this is for committing an instruction */
 				instQueue.insertFromIXU(inst);
 
+				/* we need to update another scoreboard, placed in inst_queue */
+				instQueue.addToDependentsFromIXU(inst);
+
 				/* Insert instruction to buffer in IXU */
 				buffer_of_ixu[0].push_back(inst);
 				insts_to_dispatch.pop();

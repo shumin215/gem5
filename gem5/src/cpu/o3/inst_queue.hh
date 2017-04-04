@@ -133,6 +133,9 @@ class InstructionQueue
 	/* Set inst queue count */
 	void setCount(unsigned value, ThreadID tid);
 
+	/* update another scoreboard, placed in instruction queue */
+	void addToDependentsFromIXU(DynInstPtr &inst);
+
     /** Registers statistics. */
     void regStats();
 

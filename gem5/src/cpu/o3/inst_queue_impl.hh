@@ -1595,4 +1595,17 @@ void InstructionQueue<Impl>::setCount(unsigned value, ThreadID tid)
 	this->count[tid] = value;
 }
 
+template <typename Impl>
+void InstructionQueue<Impl>::addToDependentsFromIXU(DynInstPtr &inst)
+{
+	int num_of_dest_regs = (int)inst->numDestRegs();
+
+	for(int dest_idx=0; dest_idx<num_of_dest_regs; dest_idx++)
+	{
+		int dest_reg = inst->getDestRegister(dest_idx);
+
+		regScoreboard[dest_reg] = false;
+	}
+}
+
 #endif//__CPU_O3_INST_QUEUE_IMPL_HH__
