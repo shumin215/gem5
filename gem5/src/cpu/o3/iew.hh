@@ -552,6 +552,17 @@ class DefaultIEW
 
 	/* Number of instructions entered into IXU */
 	Stats::Scalar ixuEnteredInsts;
+
+	/* Number of instructions executed in IXU */
+	Stats::Scalar ixuExecInsts;
+
+	/* Number of instructions, executed in 1st stage of IXU*/
+	Stats::Scalar ixuExecIn1st;
+	/* Number of instructions, executed in 2nd stage of IXU*/
+	Stats::Scalar ixuExecIn2nd;
+	/* Number of instructions, executed in 3rd stage of IXU*/
+	Stats::Scalar ixuExecIn3rd;
+
 };
 
 #endif // __CPU_O3_IEW_HH__

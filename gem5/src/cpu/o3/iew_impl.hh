@@ -64,6 +64,7 @@
 
 #define HISTORY_TABLE_SIZE 1000
 #define IXU_DEPTH 3
+#define IXU_WIDTH 3
 
 using namespace std;
 
@@ -233,6 +234,22 @@ DefaultIEW<Impl>::regStats()
     ixuEnteredInsts
         .name(name() + ".ixuEnteredInsts")
         .desc("Number of instructions entered into IXU");
+
+	ixuExecInsts
+        .name(name() + ".ixuExecInsts")
+        .desc("Number of instructions executed in IXU");
+
+    ixuExecIn1st
+        .name(name() + ".ixuExecIn1st")
+        .desc("Number of instructions executed in 1st stage of IXU");
+
+    ixuExecIn2nd
+        .name(name() + ".ixuExecIn2nd")
+        .desc("Number of instructions executed in 2nd stage of IXU");
+
+    ixuExecIn3rd
+        .name(name() + ".ixuExecIn3rd")
+        .desc("Number of instructions executed in 3rd stage of IXU");
 
 	/*******************************************************/
     iewExecLoadInsts
@@ -1049,8 +1066,10 @@ DefaultIEW<Impl>::dispatchInsts(ThreadID tid)
 		if(!inst->isMemRef() && !inst->isLoad() 
 				&& !inst->isStore() && getLatency(inst) == 1)
 		{
+			int ixu_buf_size = buffer_of_ixu[0].size();
+
 			/* check an instruction can enter IXU */
-			if(canInstEnterIXU(inst))
+			if(canInstEnterIXU(inst) && (ixu_buf_size < IXU_WIDTH))
 			{
 				ixuEnteredInsts++;
 
@@ -1305,6 +1324,8 @@ DefaultIEW<Impl>::executeInsts()
 		if(num_of_insts_ixu_buffer > IXU_DEPTH)
 		{
 			DPRINTF(IEW, "IXU: Buffer size of 3rd stage is exceeded.\n");
+			DPRINTF(IEW, "IXU: num of insts in %dth buffer: %d\n", 
+					buf_idx, num_of_insts_ixu_buffer);
 
 			assert(num_of_insts_ixu_buffer <= IXU_DEPTH);
 		}
@@ -1348,6 +1369,16 @@ DefaultIEW<Impl>::executeInsts()
 					DPRINTF(IEW, "IXU: Instruction is executed in %dth stage. "
 							" [sn:%i]\n", buf_idx, inst->seqNum);
 					inst->execute();
+
+					/* for measuring stats */
+					ixuExecInsts++;
+
+					if(buf_idx == 1)
+						ixuExecIn1st++;
+					else if(buf_idx == 2)
+						ixuExecIn2nd++;
+					else if(buf_idx == 3)
+						ixuExecIn3rd++;
 
 					if(!inst->readPredicate())
 						inst->forwardOldRegs();
