@@ -55,6 +55,9 @@
 #include "debug/IEW.hh"
 #include "sim/probe/probe.hh"
 
+//#define ixuWidth 2
+//#define ixuDepth 4
+
 struct DerivO3CPUParams;
 class FUPool;
 
@@ -302,6 +305,7 @@ class DefaultIEW
     /** Updates execution stats based on the instruction. */
     void updateExeInstStats(DynInstPtr &inst);
 
+
 //	/* Function unit pool for calculating latency of opclass */
 //	FUPool *fuPoolInIEWStage;
 	
@@ -326,7 +330,8 @@ class DefaultIEW
 	IXU_history_entries **IXU_history_table;
 
 	/* Buffer in front of each IXU FU */
-	std::deque<DynInstPtr> buffer_of_ixu[4];
+//	std::deque<DynInstPtr> buffer_of_ixu[ixuDepth+1];
+	std::deque<DynInstPtr> *buffer_of_ixu;
 
 	/* Update IHT on every cycle */
 	void updateIHTBeforeDispatch(void);
@@ -432,10 +437,9 @@ class DefaultIEW
      */
     bool updateLSQNextCycle;
 
-  private:
-	/* Flag for execution IXU */
-	bool isIXUUsed;
 
+
+  private:
     /** Records if there is a fetch redirect on this cycle for each thread. */
     bool fetchRedirect[Impl::MaxThreads];
 
@@ -475,6 +479,13 @@ class DefaultIEW
 
     /** Writeback width. */
     unsigned wbWidth;
+
+	/* Flag for execution IXU */
+	bool isIXUUsed;
+
+	/* Configuration of IXU */
+	unsigned ixuWidth;
+	unsigned ixuDepth;
 
     /** Number of active threads. */
     ThreadID numThreads;
@@ -562,7 +573,8 @@ class DefaultIEW
 	Stats::Scalar ixuExecIn2nd;
 	/* Number of instructions, executed in 3rd stage of IXU*/
 	Stats::Scalar ixuExecIn3rd;
-
+	/* Number of instructions, executed in 3rd stage of IXU*/
+	Stats::Scalar ixuExecIn4th;
 };
 
 #endif // __CPU_O3_IEW_HH__

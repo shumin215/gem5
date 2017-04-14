@@ -87,6 +87,9 @@ class DerivO3CPU(BaseCPU):
     dispatchWidth = Param.Unsigned(8, "Dispatch width")
     issueWidth = Param.Unsigned(8, "Issue width")
     wbWidth = Param.Unsigned(8, "Writeback width")
+    isIXUUsed = Param.Bool(True, "IXU mode is applied")
+    ixuWidth = Param.Unsigned(2, "Width of IXU")
+    ixuDepth = Param.Unsigned(3, "Depth of IXU")
     fuPool = Param.FUPool(DefaultFUPool(), "Functional Unit pool")
 
     iewToCommitDelay = Param.Cycles(1, "Issue/Execute/Writeback to commit "

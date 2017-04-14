@@ -63,8 +63,6 @@
 #include "params/DerivO3CPU.hh"
 
 #define HISTORY_TABLE_SIZE 1000
-#define IXU_DEPTH 3
-#define IXU_WIDTH 3
 
 using namespace std;
 
@@ -81,6 +79,9 @@ DefaultIEW<Impl>::DefaultIEW(O3CPU *_cpu, DerivO3CPUParams *params)
       dispatchWidth(params->dispatchWidth),
       issueWidth(params->issueWidth),
       wbWidth(params->wbWidth),
+	  isIXUUsed(params->isIXUUsed),
+	  ixuWidth(params->ixuWidth),
+	  ixuDepth(params->ixuDepth),
       numThreads(params->numThreads)
 {
     if (dispatchWidth > Impl::MaxWidth)
@@ -100,8 +101,8 @@ DefaultIEW<Impl>::DefaultIEW(O3CPU *_cpu, DerivO3CPUParams *params)
     exeStatus = Running;
     wbStatus = Idle;
 
-	/* Set IXU flag */
-	isIXUUsed = true;
+	/* Allocate IXU buffers */
+	buffer_of_ixu = new std::deque<DynInstPtr>[ixuDepth+1];
 
 	/* Initialize IXU history table */
 	IXU_history_table = new IXU_history_entries*[HISTORY_TABLE_SIZE];
@@ -250,6 +251,10 @@ DefaultIEW<Impl>::regStats()
     ixuExecIn3rd
         .name(name() + ".ixuExecIn3rd")
         .desc("Number of instructions executed in 3rd stage of IXU");
+
+    ixuExecIn4th
+        .name(name() + ".ixuExecIn4th")
+        .desc("Number of instructions executed in 4th stage of IXU");
 
 	/*******************************************************/
     iewExecLoadInsts
@@ -1069,7 +1074,7 @@ DefaultIEW<Impl>::dispatchInsts(ThreadID tid)
 			int ixu_buf_size = buffer_of_ixu[0].size();
 
 			/* check an instruction can enter IXU */
-			if(canInstEnterIXU(inst) && (ixu_buf_size < IXU_WIDTH))
+			if(canInstEnterIXU(inst) && (ixu_buf_size < ixuWidth))
 			{
 				ixuEnteredInsts++;
 
@@ -1317,17 +1322,17 @@ DefaultIEW<Impl>::executeInsts()
 	updateInstInIXUBuffer();
 
 	/* 1. Data is fetched from buffer of 3rd stage */
-	for(int buf_idx = IXU_DEPTH; buf_idx >= 1; buf_idx--)
+	for(int buf_idx = ixuDepth; buf_idx >= 1; buf_idx--)
 	{
 		int num_of_insts_ixu_buffer = buffer_of_ixu[buf_idx].size();
 
-		if(num_of_insts_ixu_buffer > IXU_DEPTH)
+		if(num_of_insts_ixu_buffer > ixuWidth)
 		{
-			DPRINTF(IEW, "IXU: Buffer size of 3rd stage is exceeded.\n");
+			DPRINTF(IEW, "IXU: Buffer size of %dth stage is exceeded.\n", ixuDepth);
 			DPRINTF(IEW, "IXU: num of insts in %dth buffer: %d\n", 
 					buf_idx, num_of_insts_ixu_buffer);
 
-			assert(num_of_insts_ixu_buffer <= IXU_DEPTH);
+			assert(num_of_insts_ixu_buffer <= ixuWidth);
 		}
 
 		for(int idx = 0; idx < num_of_insts_ixu_buffer; idx++)
@@ -1379,6 +1384,8 @@ DefaultIEW<Impl>::executeInsts()
 						ixuExecIn2nd++;
 					else if(buf_idx == 3)
 						ixuExecIn3rd++;
+					else if(buf_idx == 4)
+						ixuExecIn4th++;
 
 					if(!inst->readPredicate())
 						inst->forwardOldRegs();
@@ -1436,15 +1443,16 @@ DefaultIEW<Impl>::executeInsts()
 
 			buffer_of_ixu[buf_idx].pop_front();
 
-			if(buf_idx == 3 && !inst->isExecuted())
+			if(buf_idx == ixuDepth && !inst->isExecuted())
 			{
-				DPRINTF(IEW, "IXU: there is not executed in 3rd stage. [sn:%i]\n", inst->seqNum);
-				assert(buf_idx != 3 || inst->isExecuted());
+				DPRINTF(IEW, "IXU: there is not executed in %dth stage. [sn:%i]\n", 
+						ixuDepth, inst->seqNum);
+				assert(buf_idx != ixuDepth || inst->isExecuted());
 			}
 
 			/* Not executed instructions is lifted to next IXU stage 
 			 * except for 3rd IXU stage */
-			if(buf_idx != 3 && !inst->isExecuted())
+			if(buf_idx != ixuDepth && !inst->isExecuted())
 			{
 				DPRINTF(IEW, "IXU: Instruction can't be executed in %dth stage, so "
 				"moved to %dth stage's buffer. [sn:%i]\n", buf_idx, buf_idx+1, inst->seqNum);
@@ -2004,7 +2012,7 @@ bool DefaultIEW<Impl>::canInstEnterIXU(DynInstPtr &inst)
 		else if(isAvailableInIXU(src_reg))
 		{
 			/* If left cycle exceeds IXU depth */
-			if(IXU_history_table[src_reg]->left_cycle >= IXU_DEPTH - 1)
+			if(IXU_history_table[src_reg]->left_cycle >= ixuDepth - 1)
 			{
 				return false;
 			}
@@ -2115,7 +2123,7 @@ template <typename Impl>
 void DefaultIEW<Impl>::updateInstInIXUBuffer(void)
 {
 	/* Select buffer of which stage */
-	for(int idx=1; idx<4; idx++)
+	for(int idx=1; idx<=ixuDepth; idx++)
 	{
 		int buf_size = buffer_of_ixu[idx].size();
 
@@ -2172,7 +2180,7 @@ template <typename Impl>
 void DefaultIEW<Impl>::updateIHTBeforeDispatch(void)
 {
 	/* Select each buffer in front of IXU */
-	for(int buf_idx=1; buf_idx<=3; buf_idx++)
+	for(int buf_idx=1; buf_idx<=ixuDepth; buf_idx++)
 	{
 		int num_of_insts = buffer_of_ixu[buf_idx].size();
 

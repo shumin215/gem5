@@ -129,6 +129,9 @@ class O3_ARM_v7a_3(DerivO3CPU):
     dispatchWidth = 6
     issueWidth = 8
     wbWidth = 8
+    isIXUUsed = True
+    ixuWidth = 2
+    ixuDepth = 4
     fuPool = O3_ARM_v7a_FUP()
     iewToCommitDelay = 1
     renameToROBDelay = 1
