@@ -1,0 +1,145 @@
+gem5 Simulator System.  http://gem5.org
+gem5 is copyrighted software; use the --copyright option for details.
+
+gem5 compiled Feb 10 2017 17:57:01
+gem5 started Feb 10 2017 18:03:17
+gem5 executing on valor.localdomain, pid 38752
+command line: gem5.opt --outdir=/home/shumin/workspace/LG_Result/170124/m5out --stats-file=sjeng_o3 /home/shumin/LG_Project/gem5/configs/example/se.py --cpu-type=arm_detailed --num-cpus=1 --caches --l2cache --maxinst=500000000 --cmd=/home/shumin/benchmark/SPEC2006/458.sjeng/exe/sjeng_base.arm --options=/home/shumin/benchmark/SPEC2006/458.sjeng/data/ref/input/ref.txt
+
+Global frequency set at 1000000000000 ticks per second
+0: system.remote_gdb.listener: listening for remote gdb #0 on port 7007
+warn: ClockedObject: More than one power state change request encountered within the same simulation tick
+**** REAL SIMULATION ****
+info: Entering event queue @ 0.  Starting simulation...
+warn: CP14 unimplemented crn[14], opc1[7], crm[15], opc2[7]
+info: Increasing stack size by one page.
+info: Increasing stack size by one page.
+info: Increasing stack size by one page.
+info: Increasing stack size by one page.
+info: Increasing stack size by one page.
+info: Increasing stack size by one page.
+
+Sjeng version SPEC 1.0, Copyright (C) 2000-2005 Gian-Carlo Pascutto
+
+SPEC Workload
+
+info: Increasing stack size by one page.
+info: Increasing stack size by one page.
+info: Increasing stack size by one page.
+  +----+----+----+----+----+----+----+----+
+8 | *R |    |    |    | *K | *B |    | *R |
+  +----+----+----+----+----+----+----+----+
+7 |    | *B | *Q |    |    | *P |  R |    |
+  +----+----+----+----+----+----+----+----+
+6 | *P |    |    |    |    |  P |    |    |
+  +----+----+----+----+----+----+----+----+
+5 |    |    |    |  P | *P |    |    | *P |
+  +----+----+----+----+----+----+----+----+
+4 |    | *P |    |    |    |    |    |    |
+  +----+----+----+----+----+----+----+----+
+3 |    |    |    |    |    |    |  Q |  B |
+  +----+----+----+----+----+----+----+----+
+2 |  P |  P |  P |    |    |    |    |  P |
+  +----+----+----+----+----+----+----+----+
+1 |    |    |  K |  R |    |    |    |    |
+  +----+----+----+----+----+----+----+----+
+
+     a    b    c    d    e    f    g    h
+
+EPD: r3kb1r/1bq2pR1/p4P2/3Pp2p/1p6/6QB/PPP4P/2KR4 b kq - bm Rd8 h4; id "CCC-ANAL-2";
+
+Searching to 12 ply
+Middlegame phase.
+info: Increasing stack size by one page.
+info: Increasing stack size by one page.
+info: Increasing stack size by one page.
+Time for move : 1000000
+info: Increasing stack size by one page.
+info: Increasing stack size by one page.
+info: Increasing stack size by one page.
+info: Increasing stack size by one page.
+info: Increasing stack size by one page.
+info: Increasing stack size by one page.
+info: Increasing stack size by one page.
+info: Increasing stack size by one page.
+info: Increasing stack size by one page.
+info: Increasing stack size by one page.
+info: Increasing stack size by one page.
+info: Increasing stack size by one page.
+info: Increasing stack size by one page.
+info: Increasing stack size by one page.
+info: Increasing stack size by one page.
+info: Increasing stack size by one page.
+info: Increasing stack size by one page.
+info: Increasing stack size by one page.
+info: Increasing stack size by one page.
+info: Increasing stack size by one page.
+info: Increasing stack size by one page.
+info: Increasing stack size by one page.
+info: Increasing stack size by one page.
+info: Increasing stack size by one page.
+info: Increasing stack size by one page.
+info: Increasing stack size by one page.
+info: Increasing stack size by one page.
+info: Increasing stack size by one page.
+info: Increasing stack size by one page.
+info: Increasing stack size by one page.
+info: Increasing stack size by one page.
+info: Increasing stack size by one page.
+info: Increasing stack size by one page.
+ 2  2.45       200 Bxg7 fxg7 Rg8 
+info: Increasing stack size by one page.
+info: Increasing stack size by one page.
+info: Increasing stack size by one page.
+info: Increasing stack size by one page.
+ 2  2.45       993 Bxg7 fxg7 Rg8 
+ 3  2.10      1259 Bxg7 ??
+info: Increasing stack size by one page.
+info: Increasing stack size by one page.
+info: Increasing stack size by one page.
+info: Increasing stack size by one page.
+info: Increasing stack size by one page.
+info: Increasing stack size by one page.
+info: Increasing stack size by one page.
+info: Increasing stack size by one page.
+ 3  2.11      1724 Rd8 !
+info: Increasing stack size by one page.
+info: Increasing stack size by one page.
+info: Increasing stack size by one page.
+info: Increasing stack size by one page.
+ 3  2.44      3553 Rd8 Be6 Bxg7 fxg7 
+info: Increasing stack size by one page.
+info: Increasing stack size by one page.
+info: Increasing stack size by one page.
+info: Increasing stack size by one page.
+info: Increasing stack size by one page.
+info: Increasing stack size by one page.
+info: Increasing stack size by one page.
+info: Increasing stack size by one page.
+info: Increasing stack size by one page.
+info: Increasing stack size by one page.
+info: Increasing stack size by one page.
+info: Increasing stack size by one page.
+ 4  2.45      5553 Rd8 Be6 Bxg7 fxg7 Rg8 
+ 4  2.46      8782 h4 !
+ 4  2.45     11179 Rd8 Be6 Bxg7 fxg7 Rg8 
+info: Increasing stack size by one page.
+info: Increasing stack size by one page.
+info: Increasing stack size by one page.
+info: Increasing stack size by one page.
+info: Increasing stack size by one page.
+info: Increasing stack size by one page.
+info: Increasing stack size by one page.
+info: Increasing stack size by one page.
+info: Increasing stack size by one page.
+ 5  2.21     21737 Rd8 Qb3 Qa5 c4 Bxg7 fxg7 
+ 5  2.21     35796 Rd8 Qb3 Qa5 c4 Bxg7 fxg7 
+info: Increasing stack size by one page.
+info: Increasing stack size by one page.
+info: Increasing stack size by one page.
+info: Increasing stack size by one page.
+info: Increasing stack size by one page.
+info: Increasing stack size by one page.
+info: Increasing stack size by one page.
+info: Increasing stack size by one page.
+Exiting @ tick 422392075000 because a thread reached the max instruction count

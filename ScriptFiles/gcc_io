@@ -1,0 +1,71 @@
+gem5 Simulator System.  http://gem5.org
+gem5 is copyrighted software; use the --copyright option for details.
+
+gem5 compiled Feb  8 2017 11:35:01
+gem5 started Feb  8 2017 12:10:44
+gem5 executing on valor.localdomain, pid 13045
+command line: gem5.opt --outdir=/home/shumin/workspace/LG_Result/170124/m5out --stats-file=gcc_io gem5/configs/example/se.py --cpu-type=MinorCPU --cpu-clock=0.4GHz --num-cpus=1 --caches --l2cache --maxinst=500000000 --cmd=/home/shumin/benchmark/SPEC2006/403.gcc/exe/gcc_base.arm '--options=/home/shumin/benchmark/SPEC2006/403.gcc/data/ref/input/166.i;-o;/home/shumin/benchmark/SPEC2006/403.gcc/data/ref/output/166.s'
+
+Script gem5/configs/example/se.py not found
+Usage
+=====
+  gem5.opt [gem5 options] script.py [script options]
+
+gem5 is copyrighted software; use the --copyright option for details.
+
+Options
+=======
+--version               show program's version number and exit
+--help, -h              show this help message and exit
+--build-info, -B        Show build information
+--copyright, -C         Show full copyright information
+--readme, -R            Show the readme
+--outdir=DIR, -d DIR    Set the output directory to DIR [Default: m5out]
+--redirect-stdout, -r   Redirect stdout (& stderr, without -e) to file
+--redirect-stderr, -e   Redirect stderr to file
+--stdout-file=FILE      Filename for -r redirection [Default: simout]
+--stderr-file=FILE      Filename for -e redirection [Default: simerr]
+--interactive, -i       Invoke the interactive interpreter after running the
+                        script
+--pdb                   Invoke the python debugger before running the script
+--path=PATH[:PATH], -p PATH[:PATH]
+                        Prepend PATH to the system path when invoking the
+                        script
+--quiet, -q             Reduce verbosity
+--verbose, -v           Increase verbosity
+
+Statistics Options
+------------------
+--stats-file=FILE       Sets the output file for statistics [Default:
+                        stats.txt]
+
+Configuration Options
+---------------------
+--dump-config=FILE      Dump configuration output file [Default: config.ini]
+--json-config=FILE      Create JSON output of the configuration [Default:
+                        config.json]
+--dot-config=FILE       Create DOT & pdf outputs of the configuration
+                        [Default: config.dot]
+--dot-dvfs-config=FILE  Create DOT & pdf outputs of the DVFS configuration
+                        [Default: none]
+
+Debugging Options
+-----------------
+--debug-break=TICK[,TICK]
+                        Create breakpoint(s) at TICK(s) (kills process if no
+                        debugger attached)
+--debug-help            Print help on debug flags
+--debug-flags=FLAG[,FLAG]
+                        Sets the flags for debug output (-FLAG disables a
+                        flag)
+--debug-start=TICK      Start debug output at TICK
+--debug-end=TICK        End debug output at TICK
+--debug-file=FILE       Sets the output file for debug [Default: cout]
+--debug-ignore=EXPR     Ignore EXPR sim objects
+--remote-gdb-port=REMOTE_GDB_PORT
+                        Remote gdb base port (set to 0 to disable listening)
+
+Help Options
+------------
+--list-sim-objects      List all built-in SimObjects, their params and default
+                        values

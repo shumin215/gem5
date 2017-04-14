@@ -1,0 +1,66 @@
+gem5 Simulator System.  http://gem5.org
+gem5 is copyrighted software; use the --copyright option for details.
+
+gem5 compiled Feb 10 2017 17:57:01
+gem5 started Feb 10 2017 18:03:17
+gem5 executing on valor.localdomain, pid 38755
+command line: gem5.opt --outdir=/home/shumin/workspace/LG_Result/170124/m5out --stats-file=soplex_o3 /home/shumin/LG_Project/gem5/configs/example/se.py --cpu-type=arm_detailed --num-cpus=1 --caches --l2cache --maxinst=500000000 --cmd=/home/shumin/benchmark/SPEC2006/450.soplex/exe/soplex_base.arm --options=/home/shumin/benchmark/SPEC2006/450.soplex/data/ref/input/ref.mps
+
+Global frequency set at 1000000000000 ticks per second
+0: system.remote_gdb.listener: listening for remote gdb #0 on port 7010
+warn: ClockedObject: More than one power state change request encountered within the same simulation tick
+**** REAL SIMULATION ****
+info: Entering event queue @ 0.  Starting simulation...
+warn: CP14 unimplemented crn[14], opc1[7], crm[15], opc2[7]
+info: Increasing stack size by one page.
+Delta   =     1.000000e-06
+Epsilon =     1.000000e-17
+Entering algorithm
+Column representation
+Forest-Tomlin update
+Steep pricing
+Fast ratiotest
+No scaling
+No simplifier
+Weight starter
+loading LP file /home/shumin/benchmark/SPEC2006/450.soplex/data/ref/input/ref.mps
+warn: mremapping to new vaddr 0x3fe27000-0x3fffc000, adding 319488
+fatal: FuncPageTable::allocate: addr 0x3ffae000 already mapped
+ @ tick 46801766500
+[map:build/ARM/mem/page_table.cc, line 77]
+Memory Usage: 8678896 KBytes
+Program aborted at tick 46801766500
+--- BEGIN LIBC BACKTRACE ---
+gem5.opt(_Z15print_backtracev+0x15)[0xd980e5]
+gem5.opt(_Z12abortHandleri+0x36)[0xda8306]
+/lib64/libpthread.so.0(+0xf100)[0x7f56e41ae100]
+/lib64/libc.so.6(gsignal+0x37)[0x7f56e2a085f7]
+/lib64/libc.so.6(abort+0x148)[0x7f56e2a09ce8]
+gem5.opt(_Z15__exit_epilogueiPKcS0_iS0_+0x1ec)[0x9de66c]
+gem5.opt(_ZN13FuncPageTable3mapEmmlm+0x873)[0xc68253]
+gem5.opt(_Z10mremapFuncI10ArmLinux32E13SyscallReturnP11SyscallDesciP11LiveProcessP13ThreadContext+0x267)[0x989837]
+gem5.opt(_ZN11SyscallDesc9doSyscallEiP11LiveProcessP13ThreadContext+0x8a)[0xddd67a]
+gem5.opt(_ZN11LiveProcess7syscallElP13ThreadContext+0x4c)[0xdd3dcc]
+gem5.opt(_ZN9FullO3CPUI9O3CPUImplE7syscallEls+0xb4)[0xa85074]
+gem5.opt(_ZN6ArmISA14SupervisorCall6invokeEP13ThreadContextRK14RefCountingPtrI10StaticInstE+0x54)[0x93c2e4]
+gem5.opt(_ZN13DefaultCommitI9O3CPUImplE10commitHeadER14RefCountingPtrI13BaseO3DynInstIS0_EEj+0x148)[0xa780d8]
+gem5.opt(_ZN13DefaultCommitI9O3CPUImplE11commitInstsEv+0x4b7)[0xa7b047]
+gem5.opt(_ZN13DefaultCommitI9O3CPUImplE6commitEv+0x90d)[0xa7c52d]
+gem5.opt(_ZN13DefaultCommitI9O3CPUImplE4tickEv+0x96)[0xa7c886]
+gem5.opt(_ZN9FullO3CPUI9O3CPUImplE4tickEv+0xc3)[0xa868d3]
+gem5.opt(_ZN10EventQueue10serviceOneEv+0xb1)[0xda0741]
+gem5.opt(_Z9doSimLoopP10EventQueue+0x38)[0xdc0988]
+gem5.opt(_Z8simulatem+0x1fb)[0xdc0f0b]
+gem5.opt[0xd51bc5]
+/lib64/libpython2.7.so.1.0(PyEval_EvalFrameEx+0x50c2)[0x7f56e3ab35d2]
+/lib64/libpython2.7.so.1.0(PyEval_EvalCodeEx+0x7ed)[0x7f56e3ab40bd]
+/lib64/libpython2.7.so.1.0(PyEval_EvalFrameEx+0x425f)[0x7f56e3ab276f]
+/lib64/libpython2.7.so.1.0(PyEval_EvalFrameEx+0x4350)[0x7f56e3ab2860]
+/lib64/libpython2.7.so.1.0(PyEval_EvalFrameEx+0x4350)[0x7f56e3ab2860]
+/lib64/libpython2.7.so.1.0(PyEval_EvalCodeEx+0x7ed)[0x7f56e3ab40bd]
+/lib64/libpython2.7.so.1.0(PyEval_EvalCode+0x32)[0x7f56e3ab41c2]
+/lib64/libpython2.7.so.1.0(PyEval_EvalFrameEx+0x4f00)[0x7f56e3ab3410]
+/lib64/libpython2.7.so.1.0(PyEval_EvalCodeEx+0x7ed)[0x7f56e3ab40bd]
+/lib64/libpython2.7.so.1.0(PyEval_EvalFrameEx+0x425f)[0x7f56e3ab276f]
+/lib64/libpython2.7.so.1.0(PyEval_EvalCodeEx+0x7ed)[0x7f56e3ab40bd]
+--- END LIBC BACKTRACE ---

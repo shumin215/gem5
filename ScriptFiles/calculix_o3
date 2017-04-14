@@ -1,0 +1,27 @@
+gem5 Simulator System.  http://gem5.org
+gem5 is copyrighted software; use the --copyright option for details.
+
+gem5 compiled Feb 10 2017 17:57:01
+gem5 started Feb 10 2017 18:03:17
+gem5 executing on valor.localdomain, pid 38770
+command line: gem5.opt --outdir=/home/shumin/workspace/LG_Result/170124/m5out --stats-file=calculix_o3 /home/shumin/LG_Project/gem5/configs/example/se.py --cpu-type=arm_detailed --num-cpus=1 --caches --l2cache --maxinst=500000000 --cmd=/home/shumin/benchmark/SPEC2006/454.calculix/exe/calculix_base.arm --options=/home/shumin/benchmark/SPEC2006/454.calculix/data/ref/input/hyperviscoplastic
+
+Global frequency set at 1000000000000 ticks per second
+0: system.remote_gdb.listener: listening for remote gdb #0 on port 7009
+warn: ClockedObject: More than one power state change request encountered within the same simulation tick
+**** REAL SIMULATION ****
+info: Entering event queue @ 0.  Starting simulation...
+warn: CP14 unimplemented crn[14], opc1[7], crm[15], opc2[7]
+info: Increasing stack size by one page.
+info: Increasing stack size by one page.
+
+************************************************************
+
+CalculiX DEVELOPMENT VERSION, Copyright(C) 1998 Guido Dhondt
+CalculiX comes with ABSOLUTELY NO WARRANTY. This is free
+software, and you are welcome to redistribute it under
+certain conditions, see gpl.htm
+
+************************************************************
+
+Exiting @ tick 248646245000 because a thread reached the max instruction count
