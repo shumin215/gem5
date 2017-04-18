@@ -575,6 +575,9 @@ class DefaultIEW
 	Stats::Scalar ixuExecIn3rd;
 	/* Number of instructions, executed in 3rd stage of IXU*/
 	Stats::Scalar ixuExecIn4th;
+
+	/* Number of instructions that access instruction queue to wakeup */
+	Stats::Scalar numOfIQAccessFronIXU;
 };
 
 #endif // __CPU_O3_IEW_HH__

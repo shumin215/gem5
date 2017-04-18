@@ -24,11 +24,10 @@ spec_source_root=/home/shumin/benchmark/SPEC2006
 parsec_benchmark_path=/home/shumin/benchmark/PARSEC-2.1
 parsec_source_root=/home/shumin/benchmark/PARSEC-2.1
 simresult_root=/home/shumin/workspace/LG_Result/SimulationResult
-output_path=/home/shumin/workspace/LG_Result/SimulationResult/m5out
+output_path=/home/shumin/workspace/LG_Result/SimulationResult
 gem5_binary_path=./gem5-opt
 se_file_path=/home/shumin/LG_Project/gem5/configs/example
-
-filename_append=$1
+config_root=/home/shumin/LG_Project/gem5/configs/common
 
 # Benchmark environment registration
 # SPEC2006 INT
@@ -63,19 +62,41 @@ echo "*${spec_benchmark_path}/429.mcf/exe/mcf_base.arm;${parsec_benchmark_path}/
 echo "*${spec_benchmark_path}/458.sjeng/exe/sjeng_base.arm;${spec_benchmark_path}/473.astar/exe/astar_base.arm* *${spec_source_root}/458.sjeng/data/ref/input/ref.txt;${spec_source_root}/473.astar/data/ref/input/rivers.cfg* ** " > sjeng_astar
 echo "*${spec_benchmark_path}/436.cactusADM/exe/cactusADM_base.arm;${parsec_benchmark_path}/pkgs/apps/blackscholes/inst/gcc-arm.gcc-arm/bin/blackscholes* *${spec_source_root}/436.cactusADM/data/ref/input/benchADM.par;1 ${parsec_source_root}/pkgs/apps/blackscholes/inputs/in_10M.txt prices.txt* ** " > cactusADM_blackscholes
 
-
 for bench in ${Running_app}; do
-	
-    echo "######## $bench ########"
-	
-	exe=`awk -F'*' '{print $2}' $bench`
-	args=`awk -F'*' '{print $4}' $bench`
-	stdin=`awk -F'*' '{print $6}' $bench`
-	
-	echo `gem5.opt --outdir=${output_path}_${filename_append} --stats-file=${bench}_bL_Dual_${filename_append} ${se_file_path}/se.py --cpu-type=arm_detailed --sys-clock=1GHz --cpu-clock=1GHz --num-cpus=1 --caches --l2cache --mem-type=DDR3_1600_8x8 --mem-size=8192MB --maxinst=$MAX_INST --cmd=$exe --options="${args}" &> $simresult_root/${bench}_bL_Dual_${filename_append}`
-	
-	echo "**************** ${bench} is finished **************"
-	
+
+ixuWidth_num="1 2 3"
+for ixuWidth in ${ixuWidth_num}; do
+
+ixuDepth_num="1 2 3"
+for ixuDepth in ${ixuDepth_num}; do
+            
+    echo "######## ${bench} IXU width: ${ixuWidth}, IXU depth: ${ixuDepth} ########"
+
+    # Modify configure file
+    echo "{if (NR == 133) print \"    ixuWidth = ${ixuWidth}\" > \"${config_root}/O3_ARM_v7a.abc\";
+           else if (NR == 134) print \"    ixuDepth = ${ixuDepth}\" > \"${config_root}/O3_ARM_v7a.abc\";
+           else print \$0 > \"${config_root}/O3_ARM_v7a.abc\"}" > awkprog
+
+    echo "{print \$0 > \"${config_root}/O3_ARM_v7a.py\"}" > awkprog1
+            
+    awk -f awkprog ${config_root}/O3_ARM_v7a.py
+
+    awk -f awkprog1 ${config_root}/O3_ARM_v7a.abc
+            
+    exe=`awk -F'*' '{print $2}' $bench`
+    args=`awk -F'*' '{print $4}' $bench`
+    stdin=`awk -F'*' '{print $6}' $bench`
+                                                                                                                                           
+    echo `gem5.opt --outdir=${output_path}_IXU_W${ixuWidth}_IXU_D${ixuDepth} --stats-file=${bench}_IXU_W${ixuWidth}_IXU_D${ixuDepth} ${se_file_path}/se.py --cpu-type=arm_detailed --sys-clock=1GHz --cpu-clock=1GHz --num-cpus=1 --caches --l2cache --mem-type=DDR3_1600_8x8 --mem-size=8192MB --maxinst=$MAX_INST --cmd=$exe --options="${args}" &> $simresult_root/${bench}_IXU_W${ixuWidth}_IXU_D${ixuDepth}`
+                                                                                                                                           
+    echo "**************** ${bench} is finished **************"
+
 done
+
+done
+                                                                                                                                           
+done
+
+rm ${config_root}/O3_ARM_v7a.abc
 
 rm bzip2 gcc astar mcf hmmer libquantum sjeng soplex cactusADM calculix blackscholes freqmine fluidanimate

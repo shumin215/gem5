@@ -256,6 +256,10 @@ DefaultIEW<Impl>::regStats()
         .name(name() + ".ixuExecIn4th")
         .desc("Number of instructions executed in 4th stage of IXU");
 
+    numOfIQAccessFronIXU
+        .name(name() + ".numOfIQAccessFronIXU")
+        .desc("Number of instructions that access instruction queue to wakeup");
+
 	/*******************************************************/
     iewExecLoadInsts
         .init(cpu->numThreads)
@@ -2222,6 +2226,9 @@ void DefaultIEW<Impl>::resetIHTatSquash(DynInstPtr &inst)
 template <typename Impl>
 void DefaultIEW<Impl>::writebackInstInIXU(DynInstPtr &inst)
 {
+	/* Deosn't access instruction queue */
+	numOfIQAccessFronIXU++;
+
 	int dependents = instQueue.wakeDependents(inst);
     ThreadID tid = inst->threadNumber;
 

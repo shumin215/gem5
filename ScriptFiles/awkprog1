@@ -1,0 +1,1 @@
+{print $0 > "/home/shumin/LG_Project/gem5/configs/common/O3_ARM_v7a.py"}

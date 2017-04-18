@@ -20,9 +20,8 @@ def makeScriptFIles():
 		os.system("cp "+base_script_name + " " + base_script_name + "-" + i)
 
 def executeBenchmark():
-	filename_append = sys.argv[1]
 	for i in (program_list_spec + program_list_parcec):
-		os.system("./" + base_script_name + "-" + i + " " + filename_append + " &")
+		os.system("./" + base_script_name + "-" + i + " &")
 
 def foo(name, lock, arr):
 
