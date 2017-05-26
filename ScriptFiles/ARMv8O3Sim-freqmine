@@ -24,10 +24,11 @@ spec_source_root=/home/shumin/benchmark/SPEC2006
 parsec_benchmark_path=/home/shumin/benchmark/PARSEC-2.1
 parsec_source_root=/home/shumin/benchmark/PARSEC-2.1
 simresult_root=/home/shumin/workspace/LG_Result/SimulationResult
-output_path=/home/shumin/workspace/LG_Result/SimulationResult
+output_path=/home/shumin/workspace/LG_Result/SimulationResult/m5out
 gem5_binary_path=./gem5-opt
 se_file_path=/home/shumin/LG_Project/gem5/configs/example
 config_root=/home/shumin/LG_Project/gem5/configs/common
+config_name=$1
 
 # Benchmark environment registration
 # SPEC2006 INT
@@ -64,10 +65,10 @@ echo "*${spec_benchmark_path}/436.cactusADM/exe/cactusADM_base.arm;${parsec_benc
 
 for bench in ${Running_app}; do
 
-ixuWidth_num="1 2 3"
+ixuWidth_num="3"
 for ixuWidth in ${ixuWidth_num}; do
 
-ixuDepth_num="1 2 3"
+ixuDepth_num="3"
 for ixuDepth in ${ixuDepth_num}; do
             
     echo "######## ${bench} IXU width: ${ixuWidth}, IXU depth: ${ixuDepth} ########"
@@ -87,7 +88,7 @@ for ixuDepth in ${ixuDepth_num}; do
     args=`awk -F'*' '{print $4}' $bench`
     stdin=`awk -F'*' '{print $6}' $bench`
                                                                                                                                            
-    echo `gem5.opt --outdir=${output_path}_IXU_W${ixuWidth}_IXU_D${ixuDepth} --stats-file=${bench}_IXU_W${ixuWidth}_IXU_D${ixuDepth} ${se_file_path}/se.py --cpu-type=arm_detailed --sys-clock=1GHz --cpu-clock=1GHz --num-cpus=1 --caches --l2cache --mem-type=DDR3_1600_8x8 --mem-size=8192MB --maxinst=$MAX_INST --cmd=$exe --options="${args}" &> $simresult_root/${bench}_IXU_W${ixuWidth}_IXU_D${ixuDepth}`
+    echo `gem5.opt --outdir=${output_path}_${config_name} --stats-file=${bench}_${config_name} ${se_file_path}/se.py --fast-forward=10000000 --cpu-type=arm_detailed --sys-clock=1GHz --cpu-clock=1GHz --num-cpus=1 --caches --l2cache --mem-type=DDR3_1600_8x8 --mem-size=8192MB --maxinst=$MAX_INST --cmd=$exe --options="${args}" &> $simresult_root/${bench}_${config_name}`
                                                                                                                                            
     echo "**************** ${bench} is finished **************"
 
@@ -97,4 +98,4 @@ done
                                                                                                                                            
 done
 
-rm ${config_root}/O3_ARM_v7a.abc
+#rm ${config_root}/O3_ARM_v7a.abc

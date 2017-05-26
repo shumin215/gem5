@@ -66,6 +66,7 @@ DefaultRename<Impl>::DefaultRename(O3CPU *_cpu, DerivO3CPUParams *params)
       decodeToRenameDelay(params->decodeToRenameDelay),
       commitToRenameDelay(params->commitToRenameDelay),
       renameWidth(params->renameWidth),
+	  isMovEliUsed(params->isMovEliUsed),
       commitWidth(params->commitWidth),
       numThreads(params->numThreads),
       maxPhysicalRegs(params->numPhysIntRegs + params->numPhysFloatRegs
@@ -182,6 +183,23 @@ DefaultRename<Impl>::regStats()
         .name(name() + ".fp_rename_lookups")
         .desc("Number of floating rename lookups")
         .prereq(fpRenameLookups);
+
+	/****************** MOV Elimination *********************/
+    numOfMOVInst
+        .name(name() + ".numOfMOVInst")
+        .desc("Number of MOV instructions");
+
+    numOfAllMOVInst
+        .name(name() + ".numOfMOVRelativeInst")
+        .desc("Number of MOV relative instructions");
+
+    numOfMOVInstTwoOperands
+        .name(name() + ".numOfMOVInstTwoOperands")
+        .desc("Number of MOV instructions having only two operands");
+
+    numOfEliminatedInst
+        .name(name() + ".numOfEliminatedInst")
+        .desc("Number of Eliminated MOV instructions");
 }
 
 template <class Impl>
@@ -280,6 +298,14 @@ DefaultRename<Impl>::setRenameMap(RenameMap rm_ptr[])
 {
     for (ThreadID tid = 0; tid < numThreads; tid++)
         renameMap[tid] = &rm_ptr[tid];
+}
+
+/* Mov Elimination: set real rename map */
+template <typename Impl>
+void DefaultRename<Impl>::setCommitRenameMap(RenameMap rename_map_ptr[])
+{
+    for (ThreadID tid = 0; tid < numThreads; tid++)
+        commitRenameMap[tid] = &rename_map_ptr[tid];
 }
 
 template <class Impl>
@@ -696,9 +722,27 @@ DefaultRename<Impl>::renameInsts(ThreadID tid)
             serializeAfter(insts_to_rename, tid);
         }
 
+		if(isMovInstruction(inst))
+		{
+			numOfMOVInst++;
+
+			if(hasTwoOperands(inst))
+			{
+				numOfMOVInstTwoOperands++;
+			}
+		}
+
         renameSrcRegs(inst, inst->threadNumber);
 
         renameDestRegs(inst, inst->threadNumber);
+
+		/* Add move instruction to removeList */
+		if(inst->isEliminatedMovInst == true)
+		{
+			DPRINTF(Rename, "Mov Elimination: move instruction is added into remove list [sn:%i]\n"
+					,inst->seqNum);
+			cpu->removeFrontInst(inst);
+		}
 
         if (inst->isLoad()) {
                 loadsInProgress[tid]++;
@@ -706,10 +750,29 @@ DefaultRename<Impl>::renameInsts(ThreadID tid)
         if (inst->isStore()) {
                 storesInProgress[tid]++;
         }
-        ++renamed_insts;
-        // Notify potential listeners that source and destination registers for
-        // this instruction have been renamed.
-        ppRename->notify(inst);
+
+		bool isMovInst = isMovInstruction(inst) && hasTwoOperands(inst)
+				&& !hasImmediateValueInMov(inst) && !hasInstPCReg(inst);
+
+		/* To execlude increasing renamed_insts of move instruction */
+		if(!isMovEliUsed || !isMovInst)
+		{
+			++renamed_insts;
+		}
+
+		/* Eliminate Mov instruction */
+		if(isMovEliUsed && isMovInst)
+		{
+			DPRINTF(Rename, "Mov Elimination: Eliminating MOV instruction [sn:%i]\n",
+					inst->seqNum);
+			--insts_available;
+
+			// Notify potential listeners that source and destination registers for
+			// this instruction have been renamed.
+			ppRename->notify(inst);
+
+			continue;
+		}
 
         // Put instruction in rename queue.
         toIEW->insts[toIEWIndex] = inst;
@@ -932,13 +995,22 @@ DefaultRename<Impl>::doSquash(const InstSeqNum &squashed_seq_num, ThreadID tid)
         // is the same as the old one.  While it would be merely a
         // waste of time to update the rename table, we definitely
         // don't want to put these on the free list.
-        if (hb_it->newPhysReg != hb_it->prevPhysReg) {
+        if (hb_it->newPhysReg != hb_it->prevPhysReg || hb_it->isMovInst == true) 
+		{
             // Tell the rename map to set the architected register to the
             // previous physical register that it was renamed to.
             renameMap[tid]->setEntry(hb_it->archReg, hb_it->prevPhysReg);
 
             // Put the renamed physical register back on the free list.
-            freeList->addReg(hb_it->newPhysReg);
+			if(!isMovEliUsed || 
+					renameMap[tid]->getCountVal(hb_it->newPhysReg) <= 0)
+			{
+				freeList->addReg(hb_it->newPhysReg);
+			}
+			else if(renameMap[tid]->getCountVal(hb_it->newPhysReg) > 0)
+			{
+				renameMap[tid]->decrementCount(hb_it->newPhysReg);
+			}
         }
 
         // Notify potential listeners that the register mapping needs to be
@@ -966,12 +1038,19 @@ DefaultRename<Impl>::removeFromHistory(InstSeqNum inst_seq_num, ThreadID tid)
 
     --hb_it;
 
-    if (historyBuffer[tid].empty()) {
+	updateInstSeqNum(inst_seq_num, tid);
+
+    if (historyBuffer[tid].empty()) 
+	{
         DPRINTF(Rename, "[tid:%u]: History buffer is empty.\n", tid);
         return;
-    } else if (hb_it->instSeqNum > inst_seq_num) {
+    } 
+	else if (hb_it->instSeqNum > inst_seq_num) 
+	{
         DPRINTF(Rename, "[tid:%u]: Old sequence number encountered.  Ensure "
                 "that a syscall happened recently.\n", tid);
+		DPRINTF(Rename, "History Buffer's seqNum: %d, inst_seq_num: %d.\n",
+				hb_it->instSeqNum, inst_seq_num);
         return;
     }
 
@@ -981,20 +1060,52 @@ DefaultRename<Impl>::removeFromHistory(InstSeqNum inst_seq_num, ThreadID tid)
     // renamed.
     while (!historyBuffer[tid].empty() &&
            hb_it != historyBuffer[tid].end() &&
-           hb_it->instSeqNum <= inst_seq_num) {
-
-        DPRINTF(Rename, "[tid:%u]: Freeing up older rename of reg %i, "
-                "[sn:%lli].\n",
-                tid, hb_it->prevPhysReg, hb_it->instSeqNum);
+           hb_it->instSeqNum <= inst_seq_num) 
+	{
 
         // Don't free special phys regs like misc and zero regs, which
         // can be recognized because the new mapping is the same as
         // the old one.
-        if (hb_it->newPhysReg != hb_it->prevPhysReg) {
-            freeList->addReg(hb_it->prevPhysReg);
+        if (hb_it->newPhysReg != hb_it->prevPhysReg || hb_it->isMovInst == true) 
+		{
+			if(hb_it->isMovInst == true)
+			{
+				DPRINTF(Rename, "Mov Elimination: Update commitRenameMap "
+					"arch reg %d -> phys reg %d [sn:%lli].\n", 
+					hb_it->archReg, hb_it->newPhysReg, hb_it->instSeqNum);
+				/* Update commit rename map */
+				commitRenameMap[tid]->setEntry(hb_it->archReg, hb_it->newPhysReg);
+			}
+
+			if(!isMovEliUsed || 
+					renameMap[tid]->getCountVal(hb_it->prevPhysReg) <= 0)
+			{
+				/* Add previous phys reg into free list */
+				freeList->addReg(hb_it->prevPhysReg);
+				DPRINTF(Rename, "[tid:%u]: Freeing up older rename of phy reg %i, "
+						"[sn:%lli].\n",
+						tid, hb_it->prevPhysReg, hb_it->instSeqNum);
+			}
+			else if(renameMap[tid]->getCountVal(hb_it->prevPhysReg) > 0)
+			{
+				DPRINTF(Rename, "Mov Elimination: p%d count: %d\n", 
+						hb_it->prevPhysReg, renameMap[tid]->getCountVal(hb_it->prevPhysReg));
+				DPRINTF(Rename, "Mov Elimination: Count value is greater than zero [sn:%lli].\n"
+						,hb_it->instSeqNum);
+
+				renameMap[tid]->decrementCount(hb_it->prevPhysReg);
+			}
         }
+		else if(hb_it->newPhysReg == hb_it->prevPhysReg)
+		{
+			DPRINTF(Rename, "Mov Elimination: newPhysReg p%d == prevPhysReg p%d [sn:%lli]\n",
+					hb_it->newPhysReg, hb_it->prevPhysReg, hb_it->instSeqNum);
+		}
 
         ++renameCommittedMaps;
+
+		DPRINTF(Rename, "[tid:%u]: Removing instruction from history buffer (size=%d) [sn:%lli].\n",
+				tid, historyBuffer[tid].size()-1, hb_it->instSeqNum);
 
         historyBuffer[tid].erase(hb_it--);
     }
@@ -1073,57 +1184,158 @@ DefaultRename<Impl>::renameDestRegs(DynInstPtr &inst, ThreadID tid)
     RenameMap *map = renameMap[tid];
     unsigned num_dest_regs = inst->numDestRegs();
 
+	/* Check if instruction is Mov instruction */
+	bool isMovInst = isMovInstruction(inst) && hasTwoOperands(inst) 
+		&& !hasImmediateValueInMov(inst) && !hasInstPCReg(inst);
+
     // Rename the destination registers.
     for (int dest_idx = 0; dest_idx < num_dest_regs; dest_idx++) {
+		/* dest_reg: architectural reg index */
         RegIndex dest_reg = inst->destRegIdx(dest_idx);
+		/* independent index according to each type */
         RegIndex rel_dest_reg;
+		/* flat_rel_dest_reg: architectural reg index?*/
         RegIndex flat_rel_dest_reg;
+		/* flat_uni_dest_reg: Unified reg index */
         RegIndex flat_uni_dest_reg;
         typename RenameMap::RenameInfo rename_result;
 
-        switch (regIdxToClass(dest_reg, &rel_dest_reg)) {
-          case IntRegClass:
-            flat_rel_dest_reg = tc->flattenIntIndex(rel_dest_reg);
-            rename_result = map->renameInt(flat_rel_dest_reg);
-            flat_uni_dest_reg = flat_rel_dest_reg;  // 1:1 mapping
-            break;
+		/* If Mov elimination is applied */
+		if(isMovInst == true && isMovEliUsed)
+		{
+			/* Set identification of instruction to mov */
+			inst->isEliminatedMovInst = true;
 
-          case FloatRegClass:
-            flat_rel_dest_reg = tc->flattenFloatIndex(rel_dest_reg);
-            rename_result = map->renameFloat(flat_rel_dest_reg);
-            flat_uni_dest_reg = flat_rel_dest_reg + TheISA::FP_Reg_Base;
-            break;
+			int renamedSrcPhyReg = inst->getSrcRegister(3);
+			RegIndex srcArchReg = inst->srcRegIdx(3);
+			RegIndex rel_src_reg;
 
-          case CCRegClass:
-            flat_rel_dest_reg = tc->flattenCCIndex(rel_dest_reg);
-            rename_result = map->renameCC(flat_rel_dest_reg);
-            flat_uni_dest_reg = flat_rel_dest_reg + TheISA::CC_Reg_Base;
-            break;
+			DPRINTF(Rename, "Mov Elimination: mov r%d <- r%d. [sn:%i]\n",
+					dest_reg, srcArchReg, inst->seqNum);
+			DPRINTF(Rename, "Mov Elimination: mov p%d <- p%d. [sn:%i]\n",
+					renamedSrcPhyReg, renamedSrcPhyReg, inst->seqNum);
 
-          case MiscRegClass:
-            // misc regs don't get flattened
-            flat_rel_dest_reg = rel_dest_reg;
-            rename_result = map->renameMisc(flat_rel_dest_reg);
-            flat_uni_dest_reg = flat_rel_dest_reg + TheISA::Misc_Reg_Base;
-            break;
+//			DPRINTF(Rename, "Data Read: Dest Arch r%d: 0x%x, Src Arch r%d: 0x%x.\n",
+//					dest_reg, cpu->readArchIntReg(dest_reg, tid),
+//					srcArchReg, cpu->readArchIntReg(srcArchReg, tid));
 
-          default:
-            panic("Reg index is out of bound: %d.", dest_reg);
-        }
+			switch (regIdxToClass(dest_reg, &rel_dest_reg)) 
+			{
+			  case IntRegClass:
+				flat_rel_dest_reg = tc->flattenIntIndex(rel_dest_reg);
+				rename_result = map->renameInt(flat_rel_dest_reg, renamedSrcPhyReg);
+				flat_uni_dest_reg = flat_rel_dest_reg;  // 1:1 mapping
+
+//				regIdxToClass(srcArchReg, &rel_src_reg);
+//				srcArchReg = tc->flattenIntIndex(rel_src_reg);
+//				/* Set RegState to Old */
+//				map->setIntMapOld(srcArchReg);
+//
+//				/* Set Dest reg state to New */
+//				map->setIntMapNew(flat_rel_dest_reg);
+				break;
+
+			  case FloatRegClass:
+				flat_rel_dest_reg = tc->flattenFloatIndex(rel_dest_reg);
+				rename_result = map->renameFloat(flat_rel_dest_reg, renamedSrcPhyReg);
+				flat_uni_dest_reg = flat_rel_dest_reg + TheISA::FP_Reg_Base;
+
+//				regIdxToClass(srcArchReg, &rel_src_reg);
+//				srcArchReg = tc->flattenFloatIndex(rel_src_reg);
+//				/* Set RegState to Old */
+//				map->setFloatMapOld(srcArchReg);
+//
+//				/* Set Dest reg state to New */
+//				map->setFloatMapNew(flat_rel_dest_reg);
+				break;
+
+			  case CCRegClass:
+				flat_rel_dest_reg = tc->flattenCCIndex(rel_dest_reg);
+				rename_result = map->renameCC(flat_rel_dest_reg, renamedSrcPhyReg);
+				flat_uni_dest_reg = flat_rel_dest_reg + TheISA::CC_Reg_Base;
+
+//				regIdxToClass(srcArchReg, &rel_src_reg);
+//				srcArchReg = tc->flattenCCIndex(rel_src_reg);
+//				/* Set RegState to Old */
+//				map->setCCMapOld(srcArchReg);
+//
+//				/* Set Dest reg state to New */
+//				map->setCCMapNew(flat_rel_dest_reg);
+				break;
+
+			  case MiscRegClass:
+				// misc regs don't get flattened
+				flat_rel_dest_reg = rel_dest_reg;
+				rename_result = map->renameMisc(flat_rel_dest_reg);
+				flat_uni_dest_reg = flat_rel_dest_reg + TheISA::Misc_Reg_Base;
+				break;
+
+			  default:
+				panic("Reg index is out of bound: %d.", dest_reg);
+			}
+
+			/* Count eliminated mov instructions */
+			numOfEliminatedInst++;
+
+			/* Access count table and increment count value */
+			renameMap[tid]->incrementCount(rename_result.first);
+		}
+		else
+		{
+			switch (regIdxToClass(dest_reg, &rel_dest_reg)) 
+			{
+			  case IntRegClass:
+				flat_rel_dest_reg = tc->flattenIntIndex(rel_dest_reg);
+				rename_result = map->renameInt(flat_rel_dest_reg);
+				flat_uni_dest_reg = flat_rel_dest_reg;  // 1:1 mapping
+				break;
+
+			  case FloatRegClass:
+				flat_rel_dest_reg = tc->flattenFloatIndex(rel_dest_reg);
+				rename_result = map->renameFloat(flat_rel_dest_reg);
+				flat_uni_dest_reg = flat_rel_dest_reg + TheISA::FP_Reg_Base;
+				break;
+
+			  case CCRegClass:
+				flat_rel_dest_reg = tc->flattenCCIndex(rel_dest_reg);
+				rename_result = map->renameCC(flat_rel_dest_reg);
+				flat_uni_dest_reg = flat_rel_dest_reg + TheISA::CC_Reg_Base;
+				break;
+
+			  case MiscRegClass:
+				// misc regs don't get flattened
+				flat_rel_dest_reg = rel_dest_reg;
+				rename_result = map->renameMisc(flat_rel_dest_reg);
+				flat_uni_dest_reg = flat_rel_dest_reg + TheISA::Misc_Reg_Base;
+				break;
+
+			  default:
+				panic("Reg index is out of bound: %d.", dest_reg);
+			}
+		}
+
+		DPRINTF(Rename, "Mov Elimination: NumFreeEntries: %d [sn:%i]\n",
+				renameMap[tid]->numFreeEntries(), inst->seqNum);
+		DPRINTF(Rename, "Mov Elimination: IntFreeEntries: %d, FloatFreeEntries: %d\n",
+				renameMap[tid]->numIntFreeEntries(), renameMap[tid]->numFloatFreeEntries());
 
         inst->flattenDestReg(dest_idx, flat_uni_dest_reg);
 
         // Mark Scoreboard entry as not ready
-        scoreboard->unsetReg(rename_result.first);
+		if(inst->isEliminatedMovInst != true)
+		{
+			scoreboard->unsetReg(rename_result.first);
+		}
 
         DPRINTF(Rename, "[tid:%u]: Renaming arch reg %i to physical "
-                "reg %i.\n", tid, (int)flat_rel_dest_reg,
-                (int)rename_result.first);
+                "reg %i, prev phys reg %i.\n", tid, (int)flat_rel_dest_reg,
+                (int)rename_result.first, (int)rename_result.second);
 
         // Record the rename information so that a history can be kept.
-        RenameHistory hb_entry(inst->seqNum, flat_uni_dest_reg,
-                               rename_result.first,
-                               rename_result.second);
+        RenameHistory hb_entry(inst->seqNum, flat_uni_dest_reg, // arch reg
+                               rename_result.first,  	// new phys reg
+                               rename_result.second, 	// previous physical reg
+								inst->isEliminatedMovInst);
 
         historyBuffer[tid].push_front(hb_entry);
 
@@ -1444,6 +1656,316 @@ DefaultRename<Impl>::dumpHistory()
             buf_it++;
         }
     }
+}
+
+template <typename Impl>
+string DefaultRename<Impl>::getOpString(string strTarget, string strTok)
+{
+	int nCutPos;
+	string strResult;
+
+	while((nCutPos = strTarget.find_first_of(strTok)) != strTarget.npos)
+	{
+		if(nCutPos > 0)
+		{
+			strResult = strTarget.substr(0, nCutPos);
+			break;
+		}
+		strTarget = strTarget.substr(nCutPos+1);
+	}
+
+	return strResult;
+}
+
+template <typename Impl>
+bool DefaultRename<Impl>::hasTwoOperands(DynInstPtr &inst)
+{
+	string inst_disassembly = inst->staticInst->disassemble(inst->instAddr());
+	int nCutPos;
+	int num_of_operands = 0;
+
+	while((nCutPos = inst_disassembly.find_first_of(" ")) 
+			!= inst_disassembly.npos)
+	{
+		if(nCutPos > 0)
+		{
+			num_of_operands++;
+		}
+		inst_disassembly = inst_disassembly.substr(nCutPos+1);
+	}
+
+	if(inst_disassembly.length() > 0)
+	{
+		num_of_operands++;
+	}
+
+	if(num_of_operands == 3)
+	{
+		DPRINTF(Rename, "MOV Elimination: mov instruction (%s) has only two operands [sn:%i]\n"
+				, inst->staticInst->disassemble(inst->instAddr()), inst->seqNum);
+		return true;
+	}
+	else
+		return false;
+		
+}
+
+template <typename Impl>
+bool DefaultRename<Impl>::isMovInstruction(DynInstPtr &inst)
+{
+	string inst_disassembly = inst->staticInst->disassemble(inst->instAddr());
+	string op_string = getOpString(inst_disassembly, " ");
+
+	/* Count instruction relative to mov, such as movcc, movls, moveq.... */
+	if(inst_disassembly.find("mov") != string::npos)
+	{
+		numOfAllMOVInst++;
+	}
+
+	if(op_string.compare("mov") == 0)
+	{
+//		DPRINTF(Rename, "MOV Elimination: instruction (%s) corresponds MOV [sn:%i]\n"
+//				, inst_disassembly, inst->seqNum);
+		return true;
+	}
+	else
+		return false;
+}
+
+template <typename Impl>
+bool DefaultRename<Impl>::hasImmediateValueInMov(DynInstPtr &inst)
+{
+	string inst_disassembly = inst->staticInst->disassemble(inst->instAddr());
+
+	if(inst_disassembly.find("mov") != string::npos &&
+			inst_disassembly.find("#") != string::npos)
+	{
+		return true;
+	}
+	else
+		return false;
+}
+
+template <typename Impl>
+bool DefaultRename<Impl>::isNewStateReg(RegIndex arch_reg_index, ThreadID tid)
+{
+	ThreadContext *tc = cpu->getContext(tid);
+	RenameMap *map = renameMap[tid];
+	RegIndex rel_reg;
+	RegIndex flat_rel_reg;
+	bool result = false;
+
+	switch (regIdxToClass(arch_reg_index, &rel_reg)) 
+	{
+	  case IntRegClass:
+		flat_rel_reg = tc->flattenIntIndex(rel_reg);
+		result = map->isNewStateInt(flat_rel_reg);
+		break;
+
+	  case FloatRegClass:
+		flat_rel_reg = tc->flattenFloatIndex(rel_reg);
+		result = map->isNewStateFloat(flat_rel_reg);
+		break;
+
+	  case CCRegClass:
+		flat_rel_reg = tc->flattenCCIndex(rel_reg);
+		result = map->isNewStateCC(flat_rel_reg);
+		break;
+
+	  case MiscRegClass:
+		// misc regs don't get flattened
+		flat_rel_reg = rel_reg;
+		break;
+
+	  default:
+		panic("Reg index is out of bound: %d.", arch_reg_index);
+	}
+
+	if(result == false)
+	{
+		DPRINTF(Rename, "Mov Elimination: arch reg %d is Old state.\n"
+				, arch_reg_index);
+	}
+	else
+	{
+		DPRINTF(Rename, "Mov Elimination: arch reg %d is New state.\n"
+				, arch_reg_index);
+	}
+
+	return result;
+}
+
+template <typename Impl>
+void DefaultRename<Impl>::setMapNew(RegIndex arch_reg_index, ThreadID tid)
+{
+	ThreadContext *tc = cpu->getContext(tid);
+	RenameMap *map = renameMap[tid];
+	RegIndex rel_reg;
+	RegIndex flat_rel_reg;
+
+	DPRINTF(Rename, "Mov Elimination: arch reg %d sets New state.\n",
+			arch_reg_index);
+
+	switch (regIdxToClass(arch_reg_index, &rel_reg)) 
+	{
+	  case IntRegClass:
+		flat_rel_reg = tc->flattenIntIndex(rel_reg);
+		map->setIntMapNew(flat_rel_reg);
+		break;
+
+	  case FloatRegClass:
+		flat_rel_reg = tc->flattenFloatIndex(rel_reg);
+		map->setFloatMapNew(flat_rel_reg);
+		break;
+
+	  case CCRegClass:
+		flat_rel_reg = tc->flattenCCIndex(rel_reg);
+		map->setCCMapNew(flat_rel_reg);
+		break;
+
+	  case MiscRegClass:
+		// misc regs don't get flattened
+		flat_rel_reg = rel_reg;
+		break;
+
+	  default:
+		panic("Reg index is out of bound: %d.", arch_reg_index);
+	}
+}
+
+template <typename Impl>
+void DefaultRename<Impl>::
+setRegOldStateInHB(RegIndex src_arch_reg_index, ThreadID tid)
+{
+	/* Search if there is register we want */
+    typename std::list<RenameHistory>::iterator buf_it = historyBuffer[tid].begin();
+	int count = 0;
+
+	while(buf_it != historyBuffer[tid].end())
+	{
+		if((*buf_it).archReg == src_arch_reg_index)
+		{
+			DPRINTF(Rename, "Mov Elimination: searching arch reg %d is complete.\n",
+					src_arch_reg_index);
+			DPRINTF(Rename, "Mov Elimination: set arch reg %d to old state.\n",
+					src_arch_reg_index);
+			
+			(*buf_it).isMovInst = false;
+			count++;
+		}
+
+		buf_it++;
+	}
+
+	if(count == 0)
+	{
+		DPRINTF(Rename, "Mov Elimination: There is no matching arch reg in history buffer.\n");
+		assert(count == 0);
+	}
+}
+
+template <typename Impl>
+void DefaultRename<Impl>::setRegNewStateInHB(RegIndex src_arch_reg, ThreadID tid)
+{
+	/* Search if there is register we want */
+    typename std::list<RenameHistory>::iterator buf_it = historyBuffer[tid].begin();
+	int count = 0;
+
+	while(buf_it != historyBuffer[tid].end())
+	{
+		if(buf_it->archReg == src_arch_reg)
+		{
+			DPRINTF(Rename, "Mov Elimination: searching arch reg %d [sn:%i]is complete.\n",
+					src_arch_reg, buf_it->instSeqNum);
+			
+			(*buf_it).isMovInst = true;
+			count++;
+		}
+
+		buf_it++;
+	}
+
+	if(count == 0)
+	{
+		DPRINTF(Rename, "Mov Elimination: There is no matching arch reg in history buffer.\n");
+		assert(count == 0);
+	}
+}
+
+template <typename Impl>
+bool DefaultRename<Impl>::isDestRegPCReg(DynInstPtr &inst)
+{
+    unsigned num_dest_regs = inst->numDestRegs();
+	bool result = false;
+
+    for (int dest_idx = 0; dest_idx < num_dest_regs; dest_idx++) 
+	{
+		/* dest_reg: architectural reg index */
+        RegIndex dest_reg = inst->destRegIdx(dest_idx);
+
+		/* If dest reg is PC register */
+		if(dest_reg == 15)
+		{
+			DPRINTF(Rename, "Mov Elimination: Dest Reg corresponds PC reg (%d) [sn:%i]\n",
+					dest_reg, inst->seqNum);
+			return true;
+		}
+	}
+
+	return result;
+}
+
+template <typename Impl>
+bool DefaultRename<Impl>::hasInstPCReg(DynInstPtr &inst)
+{
+	bool result = false;
+	string inst_disassembly = inst->staticInst->disassemble(inst->instAddr());
+	string op_string = getOpString(inst_disassembly, " ");
+
+	/* Count instruction relative to mov, such as movcc, movls, moveq.... */
+	if(inst_disassembly.find("pc") != string::npos)
+	{
+		DPRINTF(Rename, "Mov Elimination: Inst has PC reg of src [sn:%i]\n",
+				inst->seqNum);
+		return true;
+	}
+
+	return result;
+}
+
+template <typename Impl>
+void DefaultRename<Impl>::updateInstSeqNum(InstSeqNum &inst_seq_num, ThreadID tid)
+{
+	typename std::list<RenameHistory>::iterator hb_iter =
+			historyBuffer[tid].begin();
+	bool end_flag = false;
+
+	/* Get pointer of the inst seq num */
+	while(hb_iter != historyBuffer[tid].end())
+	{
+		if(hb_iter->instSeqNum == inst_seq_num)
+			break;
+
+		hb_iter++;
+	}
+
+	if(hb_iter == historyBuffer[tid].end())
+		return;
+
+	hb_iter--;
+
+	while(end_flag == false && hb_iter->isMovInst == true)
+	{
+		if(hb_iter == historyBuffer[tid].begin())
+			end_flag = true;
+
+		inst_seq_num = hb_iter->instSeqNum;	
+
+		DPRINTF(Rename, "Update inst seq num [sn:%lli].\n", inst_seq_num);
+
+		/* Decrement iterator */
+		hb_iter--;
+	}
 }
 
 #endif//__CPU_O3_RENAME_IMPL_HH__

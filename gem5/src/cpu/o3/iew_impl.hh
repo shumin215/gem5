@@ -260,6 +260,10 @@ DefaultIEW<Impl>::regStats()
         .name(name() + ".numOfIQAccessFronIXU")
         .desc("Number of instructions that access instruction queue to wakeup");
 
+    numOfForwardingInIXU
+        .name(name() + ".numOfForwardingInIXU")
+        .desc("Number of forwarded counts that in IXU structure");
+
 	/*******************************************************/
     iewExecLoadInsts
         .init(cpu->numThreads)
@@ -1018,6 +1022,14 @@ DefaultIEW<Impl>::dispatchInsts(ThreadID tid)
     {
         inst = insts_to_dispatch.front();
 
+		/* If instruction is mov eliminated in rename satge, 
+		 * get rid of this instruction right now */
+//		if(inst->isEliminatedMovInst == true)
+//		{
+//            insts_to_dispatch.pop();
+//			continue;
+//		}
+
         if (dispatchStatus[tid] == Unblocking) {
             DPRINTF(IEW, "[tid:%i]: Issue: Examining instruction from skid "
                     "buffer\n", tid);
@@ -1080,6 +1092,9 @@ DefaultIEW<Impl>::dispatchInsts(ThreadID tid)
 			/* check an instruction can enter IXU */
 			if(canInstEnterIXU(inst) && (ixu_buf_size < ixuWidth))
 			{
+				/* count number of forwarding count stats */
+				countNumOfForwarding(inst);
+
 				ixuEnteredInsts++;
 
 				/* Updates dest regs of instruction in IHT */
@@ -1935,7 +1950,8 @@ DefaultIEW<Impl>::checkMisprediction(DynInstPtr &inst)
         !toCommit->squash[tid] ||
         toCommit->squashedSeqNum[tid] > inst->seqNum) {
 
-        if (inst->mispredicted()) {
+        if (inst->mispredicted()) 
+		{
             fetchRedirect[tid] = true;
 
             DPRINTF(IEW, "Execute: Branch mispredict detected.\n");
@@ -1953,6 +1969,11 @@ DefaultIEW<Impl>::checkMisprediction(DynInstPtr &inst)
                 predictedNotTakenIncorrect++;
             }
         }
+		else if(!inst->mispredicted())
+		{
+			DPRINTF(IEW, "Execute: Branch prediction is correct [sn:%i]\n",
+					inst->seqNum);
+		}
     }
 }
 
@@ -2235,6 +2256,22 @@ void DefaultIEW<Impl>::writebackInstInIXU(DynInstPtr &inst)
 	if (dependents) {
 		producerInst[tid]++;
 		consumerInst[tid]+= dependents;
+	}
+}
+
+template<typename Impl>
+void DefaultIEW<Impl>::countNumOfForwarding(DynInstPtr &inst)
+{
+	int num_of_src_regs = (int)inst->numSrcRegs();
+
+	for(int src_idx=0; src_idx < num_of_src_regs; src_idx++)
+	{
+		int src_reg = inst->getSrcRegister(src_idx);
+
+		if(!scoreboard->getReg(src_reg))
+		{
+			numOfForwardingInIXU++;
+		}
 	}
 }
 

@@ -72,10 +72,22 @@ class SimpleRenameMap
 
     typedef TheISA::RegIndex RegIndex;
 
+	/* For MOV elimination
+	 * New: its destination reg can be added to freeList
+	 * Old: its destination reg can't be added to freeList */
+	enum RegState 
+	{
+		New,
+		Old
+	};
+
   private:
 
     /** The acutal arch-to-phys register map */
     std::vector<PhysRegIndex> map;
+
+	/* State of each architectural register for MOV elimination */
+	std::vector<RegState> state;
 
     /**
      * Pointer to the free list from which new physical registers
@@ -120,7 +132,7 @@ class SimpleRenameMap
      * @return A RenameInfo pair indicating both the new and previous
      * physical registers.
      */
-    RenameInfo rename(RegIndex arch_reg);
+    RenameInfo rename(RegIndex arch_reg, int target_phy_reg=-1);
 
     /**
      * Look up the physical register mapped to an architectural register.
@@ -146,6 +158,21 @@ class SimpleRenameMap
 
     /** Return the number of free entries on the associated free list. */
     unsigned numFreeEntries() const { return freeList->numFreeRegs(); }
+
+	/* Set reg state old */
+	void setStateOld(int src_reg_idx);
+
+	/* Set reg state New */
+	void setStateNew(int reg_idx);
+
+	/* Check state of architectural register is New */
+	bool isMovInst(RegIndex arch_reg_idx)
+	{
+		if(state[arch_reg_idx] == New)
+			return true;
+		else
+			return false;
+	}
 };
 
 
@@ -210,9 +237,16 @@ class UnifiedRenameMap
      * Perform rename() on an integer register, given a relative
      * integer register index.
      */
-    RenameInfo renameInt(RegIndex rel_arch_reg)
+    RenameInfo renameInt(RegIndex rel_arch_reg, int renamed_src_phy_reg=-1)
     {
-        RenameInfo info = intMap.rename(rel_arch_reg);
+		RenameInfo info;
+		if(renamed_src_phy_reg != -1)
+		{
+			info = intMap.rename(rel_arch_reg, renamed_src_phy_reg);
+		}
+		else
+			info = intMap.rename(rel_arch_reg);
+
         assert(regFile->isIntPhysReg(info.first));
         return info;
     }
@@ -221,9 +255,16 @@ class UnifiedRenameMap
      * Perform rename() on a floating-point register, given a relative
      * floating-point register index.
      */
-    RenameInfo renameFloat(RegIndex rel_arch_reg)
+    RenameInfo renameFloat(RegIndex rel_arch_reg, int renamed_src_phy_reg=-1)
     {
-        RenameInfo info = floatMap.rename(rel_arch_reg);
+		RenameInfo info;
+		if(renamed_src_phy_reg != -1)
+		{
+			info = floatMap.rename(rel_arch_reg, renamed_src_phy_reg);
+		}
+		else
+			info = floatMap.rename(rel_arch_reg);
+		
         assert(regFile->isFloatPhysReg(info.first));
         return info;
     }
@@ -232,9 +273,16 @@ class UnifiedRenameMap
      * Perform rename() on a condition-code register, given a relative
      * condition-code register index.
      */
-    RenameInfo renameCC(RegIndex rel_arch_reg)
+    RenameInfo renameCC(RegIndex rel_arch_reg, int renamed_src_phy_reg=-1)
     {
-        RenameInfo info = ccMap.rename(rel_arch_reg);
+		RenameInfo info;
+		if(renamed_src_phy_reg != -1)
+		{
+			info = ccMap.rename(rel_arch_reg, renamed_src_phy_reg);
+		}
+		else
+			info = ccMap.rename(rel_arch_reg);
+
         assert(regFile->isCCPhysReg(info.first));
         return info;
     }
@@ -253,6 +301,59 @@ class UnifiedRenameMap
         return RenameInfo(phys_reg, phys_reg);
     }
 
+	/* Set RegState of intMap to Old */
+	void setIntMapOld(int src_reg)
+	{
+		intMap.setStateOld(src_reg);
+	}
+
+	/* Set RegState of intMap to New */
+	void setIntMapNew(int src_reg)
+	{
+		intMap.setStateNew(src_reg);
+	}
+
+	/* Set RegState of floatMap to Old */
+	void setFloatMapOld(int src_reg)
+	{
+		floatMap.setStateOld(src_reg);
+	}
+
+	/* Set RegState of floatMap to New */
+	void setFloatMapNew(int src_reg)
+	{
+		floatMap.setStateNew(src_reg);
+	}
+
+	/* Set RegState of intMap to Old */
+	void setCCMapOld(int src_reg)
+	{
+		ccMap.setStateOld(src_reg);
+	}
+
+	/* Set RegState of intMap to new */
+	void setCCMapNew(int src_reg)
+	{
+		ccMap.setStateNew(src_reg);
+	}
+
+	/* Check state of architectural register is New */
+	bool isNewStateInt(RegIndex arch_reg_idx)
+	{
+		return intMap.isMovInst(arch_reg_idx);
+	}
+
+	/* Check state of architectural register is New */
+	bool isNewStateFloat(RegIndex arch_reg_idx)
+	{
+		return floatMap.isMovInst(arch_reg_idx);
+	}
+
+	/* Check state of architectural register is New */
+	bool isNewStateCC(RegIndex arch_reg_idx)
+	{
+		return ccMap.isMovInst(arch_reg_idx);
+	}
 
     /**
      * Look up the physical register mapped to an architectural register.
@@ -359,6 +460,16 @@ class UnifiedRenameMap
         return std::min(intMap.numFreeEntries(), floatMap.numFreeEntries());
     }
 
+	unsigned numIntFreeEntries() const
+	{
+		return intMap.numFreeEntries();
+	}
+
+	unsigned numFloatFreeEntries() const
+	{
+		return floatMap.numFreeEntries();
+	}
+
     /**
      * Return whether there are enough registers to serve the request.
      */
@@ -369,6 +480,23 @@ class UnifiedRenameMap
             ccRegs <= ccMap.numFreeEntries();
     }
 
+	/* Get count value in count table */
+	int getCountVal(PhysRegIndex phys_reg)
+	{
+		return regFile->countTable[phys_reg];
+	}
+
+	/* Increment count field's value of physical register */
+	void incrementCount(PhysRegIndex phys_reg)
+	{
+		regFile->countTable[phys_reg]++;
+	}
+
+	/* Decrement count field's value of physical register */
+	void decrementCount(PhysRegIndex phys_reg)
+	{
+		regFile->countTable[phys_reg]--;
+	}
 };
 
 #endif //__CPU_O3_RENAME_MAP_HH__

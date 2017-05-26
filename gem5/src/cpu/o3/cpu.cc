@@ -319,6 +319,9 @@ FullO3CPU<Impl>::FullO3CPU(DerivO3CPUParams *params)
     }
 
     rename.setRenameMap(renameMap);
+	/* Mov Elimination */
+	rename.setCommitRenameMap(commitRenameMap);
+
     commit.setRenameMap(commitRenameMap);
     rename.setFreeList(&freeList);
 
@@ -1304,9 +1307,9 @@ FullO3CPU<Impl>::setCCReg(int reg_idx, CCReg val)
     regFile.setCCReg(reg_idx, val);
 }
 
+/* reg_idx: architectural reg, phys_reg: physical reg */
 template <class Impl>
-uint64_t
-FullO3CPU<Impl>::readArchIntReg(int reg_idx, ThreadID tid)
+uint64_t FullO3CPU<Impl>::readArchIntReg(int reg_idx, ThreadID tid)
 {
     intRegfileReads++;
     PhysRegIndex phys_reg = commitRenameMap[tid].lookupInt(reg_idx);

@@ -567,10 +567,10 @@ DefaultFetch<Impl>::lookupAndUpdateNextPC(
                                         nextPC, tid);
 
     if (predict_taken) {
-        DPRINTF(Fetch, "[tid:%i]: [sn:%i]:  Branch predicted to be taken to %s.\n",
+        DPRINTF(Fetch, "[tid:%i]: [sn:%i]: Branch predicted to be taken to %s.\n",
                 tid, inst->seqNum, nextPC);
     } else {
-        DPRINTF(Fetch, "[tid:%i]: [sn:%i]:Branch predicted to be not taken.\n",
+        DPRINTF(Fetch, "[tid:%i]: [sn:%i]: Branch predicted to be not taken.\n",
                 tid, inst->seqNum);
     }
 

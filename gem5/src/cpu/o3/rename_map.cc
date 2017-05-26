@@ -55,10 +55,13 @@ SimpleRenameMap::init(unsigned size, SimpleFreeList *_freeList,
     map.resize(size);
     freeList = _freeList;
     zeroReg = _zeroReg;
+
+	/* initialize state of each register in renameMap */
+	state.resize(size);
 }
 
 SimpleRenameMap::RenameInfo
-SimpleRenameMap::rename(RegIndex arch_reg)
+SimpleRenameMap::rename(RegIndex arch_reg, int target_phy_reg)
 {
     PhysRegIndex renamed_reg;
 
@@ -69,9 +72,19 @@ SimpleRenameMap::rename(RegIndex arch_reg)
     // If it's not referencing the zero register, then rename the
     // register.
     if (arch_reg != zeroReg) {
-        renamed_reg = freeList->getReg();
+		/* If there is target physical reg to be renamed */
+		if(target_phy_reg != -1)
+		{
+			renamed_reg = target_phy_reg;
+		}
+		else
+		{
+			renamed_reg = freeList->getReg();
+		}
+		map[arch_reg] = renamed_reg;
 
-        map[arch_reg] = renamed_reg;
+		/* set regstate to new */
+		state[arch_reg] = New;
     } else {
         // Otherwise return the zero register so nothing bad happens.
         assert(prev_reg == zeroReg);
@@ -82,6 +95,18 @@ SimpleRenameMap::rename(RegIndex arch_reg)
             arch_reg, renamed_reg, prev_reg);
 
     return RenameInfo(renamed_reg, prev_reg);
+}
+
+void SimpleRenameMap::setStateOld(int src_reg_idx)
+{
+	DPRINTF(Rename, "Set arch reg %d to Old state in renameMap\n",src_reg_idx);
+	state[src_reg_idx] = Old;
+}
+
+void SimpleRenameMap::setStateNew(int reg_idx)
+{
+	DPRINTF(Rename, "Set arch reg %d to New state in renameMap\n",reg_idx);
+	state[reg_idx] = New;
 }
 
 

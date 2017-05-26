@@ -369,6 +369,9 @@ class DefaultIEW
 	/* Through buffer in IXU, updates instructions' status */
 	void updateInstInIXUBuffer(void);
 
+	/* count number of forwarding count stats */
+	void countNumOfForwarding(DynInstPtr &inst);
+
     /** Pointer to main time buffer used for backwards communication. */
     TimeBuffer<TimeStruct> *timeBuffer;
 
@@ -578,6 +581,9 @@ class DefaultIEW
 
 	/* Number of instructions that access instruction queue to wakeup */
 	Stats::Scalar numOfIQAccessFronIXU;
+
+	/* Number of forwarded counts in IXU */
+	Stats::Scalar numOfForwardingInIXU;
 };
 
 #endif // __CPU_O3_IEW_HH__

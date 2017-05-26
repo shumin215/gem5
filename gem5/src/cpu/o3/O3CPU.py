@@ -90,6 +90,7 @@ class DerivO3CPU(BaseCPU):
     isIXUUsed = Param.Bool(True, "IXU mode is applied")
     ixuWidth = Param.Unsigned(2, "Width of IXU")
     ixuDepth = Param.Unsigned(3, "Depth of IXU")
+    isMovEliUsed = Param.Bool(True, "MOV elimination is applied")
     fuPool = Param.FUPool(DefaultFUPool(), "Functional Unit pool")
 
     iewToCommitDelay = Param.Cycles(1, "Issue/Execute/Writeback to commit "

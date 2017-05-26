@@ -71,6 +71,8 @@ class PhysRegFile
     /** Condition-code register file. */
     std::vector<CCReg> ccRegFile;
 
+
+
     /**
      * The first floating-point physical register index.  The physical
      * register file has a single continuous index space, with the
@@ -104,6 +106,9 @@ class PhysRegFile
     PhysRegFile(unsigned _numPhysicalIntRegs,
                 unsigned _numPhysicalFloatRegs,
                 unsigned _numPhysicalCCRegs);
+
+	/* Counter Field for MOV Elimination */
+	std::vector<int> countTable;
 
     /**
      * Destructor to free resources
@@ -262,6 +267,7 @@ class PhysRegFile
 
         ccRegFile[reg_offset] = val;
     }
+
 };
 
 

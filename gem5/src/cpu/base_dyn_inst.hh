@@ -244,6 +244,9 @@ class BaseDynInst : public ExecContext, public RefCounted
 	/* This is for identification of instruction executed in IXU */
 	bool isExecInIXU;
 
+	/* This is for identification of mov instruction eliminated in rename stage */
+	bool isEliminatedMovInst;
+
     /////////////////////// TLB Miss //////////////////////
     /**
      * Saved memory requests (needed when the DTB address translation is

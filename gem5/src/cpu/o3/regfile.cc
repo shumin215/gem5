@@ -53,6 +53,9 @@ PhysRegFile::PhysRegFile(unsigned _numPhysicalIntRegs,
         warn("Non-zero number of physical CC regs specified, even though\n"
              "    ISA does not use them.\n");
     }
+
+	/* Initialize count of each physical register */
+	countTable.resize(totalNumRegs, 0);
 }
 
 

@@ -94,6 +94,9 @@ DefaultBTB::valid(Addr instPC, ThreadID tid)
 
     Addr inst_tag = getTag(instPC);
 
+    DPRINTF(Fetch, "BTB: BTB index: %d, Tag: %s, Actual Tag: %s, Inst addr: %s\n",
+			btb_idx, inst_tag, btb[btb_idx].tag, instPC);
+
     assert(btb_idx < numEntries);
 
     if (btb[btb_idx].valid
@@ -114,6 +117,8 @@ DefaultBTB::lookup(Addr instPC, ThreadID tid)
     unsigned btb_idx = getIndex(instPC, tid);
 
     Addr inst_tag = getTag(instPC);
+
+
 
     assert(btb_idx < numEntries);
 
@@ -137,4 +142,7 @@ DefaultBTB::update(Addr instPC, const TheISA::PCState &target, ThreadID tid)
     btb[btb_idx].valid = true;
     btb[btb_idx].target = target;
     btb[btb_idx].tag = getTag(instPC);
+
+    DPRINTF(Fetch, "BTB Update: BTB index: %d, Tag: %s, Target: %s, Inst addr: %s\n",
+			btb_idx, btb[btb_idx].tag, target, instPC);
 }

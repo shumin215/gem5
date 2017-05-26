@@ -46,6 +46,7 @@
 
 #include <list>
 #include <utility>
+#include <string>
 
 #include "base/statistics.hh"
 #include "config/the_isa.hh"
@@ -168,6 +169,8 @@ class DefaultRename
     /** Pointer to commit stage. Used only for initialization. */
     Commit *commit_ptr;
 
+
+
   public:
     /** Initializes variables for the stage. */
     void startupStage();
@@ -177,6 +180,9 @@ class DefaultRename
 
     /** Sets pointer to rename maps (per-thread structures). */
     void setRenameMap(RenameMap rm_ptr[Impl::MaxThreads]);
+
+	/* Mov Elimination: Sets pointer of commit rename map */
+	void setCommitRenameMap(RenameMap rename_map_ptr[Impl::MaxThreads]);
 
     /** Sets pointer to the free list. */
     void setFreeList(FreeList *fl_ptr);
@@ -287,6 +293,40 @@ class DefaultRename
     /** Checks the signals and updates the status. */
     bool checkSignalsAndUpdate(ThreadID tid);
 
+	std::string getOpString(std::string strTarget, std::string strTok);
+
+	/* Checks instruction has only two operands */
+	bool hasTwoOperands(DynInstPtr &inst);
+
+	/* Checks instruction is MOV instructions */
+	bool isMovInstruction(DynInstPtr &inst);
+
+	/* Check whether instruction's destination reg is PC reg (r13) */
+	bool isDestRegPCReg(DynInstPtr &inst);
+
+	/* Check whether instruction has any PC source register */
+	bool hasInstPCReg(DynInstPtr &inst);
+
+	/* Check instruction is MOV instruction having immediate value */
+	bool hasImmediateValueInMov(DynInstPtr &inst);
+
+	/* Check state of architectural register, having a prevPhysReg is New 
+	 * in renameMap */
+	bool isNewStateReg(RegIndex arch_reg_index, ThreadID tid);
+
+	/* If arch reg is Old state after commit, the reg state has to be changed
+	 * into New state */
+	void setMapNew(RegIndex arch_reg, ThreadID tid);
+	
+	/* Set register state to old in history buffer */
+	void setRegOldStateInHB(RegIndex src_arch_reg_index, ThreadID tid);
+
+	/* Set register state to new in history buffer */
+	void setRegNewStateInHB(RegIndex src_arch_reg, ThreadID tid);
+
+	/* Update Inst Seq Num */
+	void updateInstSeqNum(InstSeqNum &inst_seq_num, ThreadID tid);
+
     /** Either serializes on the next instruction available in the InstQueue,
      * or records that it must serialize on the next instruction to enter
      * rename.
@@ -302,9 +342,10 @@ class DefaultRename
      */
     struct RenameHistory {
         RenameHistory(InstSeqNum _instSeqNum, RegIndex _archReg,
-                      PhysRegIndex _newPhysReg, PhysRegIndex _prevPhysReg)
+                      PhysRegIndex _newPhysReg, PhysRegIndex _prevPhysReg,
+					  bool _isMov = false)
             : instSeqNum(_instSeqNum), archReg(_archReg),
-              newPhysReg(_newPhysReg), prevPhysReg(_prevPhysReg)
+              newPhysReg(_newPhysReg), prevPhysReg(_prevPhysReg), isMovInst(_isMov)
         {
         }
 
@@ -316,6 +357,9 @@ class DefaultRename
         PhysRegIndex newPhysReg;
         /** The old physical register that the arch. register was renamed to. */
         PhysRegIndex prevPhysReg;
+
+		/* This is register state that can be released to free list */
+		bool isMovInst;
     };
 
     /** A per-thread list of all destination register renames, used to either
@@ -358,6 +402,9 @@ class DefaultRename
 
     /** Rename map interface. */
     RenameMap *renameMap[Impl::MaxThreads];
+
+	/* Mov Elimination: Commit Rename Map Interface */
+	RenameMap *commitRenameMap[Impl::MaxThreads];
 
     /** Free list interface. */
     FreeList *freeList;
@@ -437,6 +484,9 @@ class DefaultRename
 
     /** Rename width, in instructions. */
     unsigned renameWidth;
+
+	/* Flag for MOV elimination technique */
+	bool isMovEliUsed;
 
     /** Commit width, in instructions.  Used so rename knows how many
      *  instructions might have freed registers in the previous cycle.
@@ -526,6 +576,16 @@ class DefaultRename
     Stats::Scalar renamedTempSerializing;
     /** Number of instructions inserted into skid buffers. */
     Stats::Scalar renameSkidInsts;
+
+	/* Number of MOV instructions */
+	Stats::Scalar numOfMOVInst;
+	/* Number of MOV instructions */
+	Stats::Scalar numOfAllMOVInst;
+	/* Number of MOV instructions having only two operands*/
+	Stats::Scalar numOfMOVInstTwoOperands;
+
+	/* Number of Eliminated Mov instructions */
+	Stats::Scalar numOfEliminatedInst;
 };
 
 #endif // __CPU_O3_RENAME_HH__

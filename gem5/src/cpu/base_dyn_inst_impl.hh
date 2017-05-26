@@ -102,6 +102,9 @@ BaseDynInst<Impl>::initVars()
 	/* This is for IXU instruction */
 	isExecInIXU = false;
 
+	/* This is for MOV Elimination */
+	isEliminatedMovInst = false;
+
     lqIdx = -1;
     sqIdx = -1;
 

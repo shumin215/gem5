@@ -11,6 +11,7 @@ program_list_spec = ['bzip2', 'gcc', 'astar', 'mcf', 'libquantum', 'sjeng', 'cac
 program_list_parcec = ['blackscholes', 'freqmine', 'fluidanimate']
 base_script_name = 'ARMv8O3Sim'
 numberOfProcess = 10
+suffix = sys.argv[1]
 
 test_list = [i for i in range(1,11)]
 
@@ -21,7 +22,7 @@ def makeScriptFIles():
 
 def executeBenchmark():
 	for i in (program_list_spec + program_list_parcec):
-		os.system("./" + base_script_name + "-" + i + " &")
+		os.system("./" + base_script_name + "-" + i + " " + suffix + " &")
 
 def foo(name, lock, arr):
 

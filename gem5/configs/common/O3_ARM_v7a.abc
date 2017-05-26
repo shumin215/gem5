@@ -119,19 +119,20 @@ class O3_ARM_v7a_3(DerivO3CPU):
     commitToRenameDelay = 1
     commitToIEWDelay = 1
     fetchWidth = 3
-    fetchBufferSize = 16
+    fetchBufferSize = 32
     fetchToDecodeDelay = 3
     decodeWidth = 3
     decodeToRenameDelay = 2
     renameWidth = 3
     renameToIEWDelay = 1
     issueToExecuteDelay = 1
-    dispatchWidth = 6
+    dispatchWidth = 3
     issueWidth = 8
     wbWidth = 8
     isIXUUsed = True
-    ixuWidth = 1
-    ixuDepth = 1
+    ixuWidth = 3
+    ixuDepth = 3
+    isMovEliUsed = True
     fuPool = O3_ARM_v7a_FUP()
     iewToCommitDelay = 1
     renameToROBDelay = 1
@@ -142,8 +143,8 @@ class O3_ARM_v7a_3(DerivO3CPU):
     forwardComSize = 5
     numPhysIntRegs = 128
     numPhysFloatRegs = 192
-    numIQEntries = 32
-    numROBEntries = 40
+    numIQEntries = 64
+    numROBEntries = 128
 
     switched_out = False
     branchPred = O3_ARM_v7a_BP()

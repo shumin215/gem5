@@ -1009,8 +1009,7 @@ DefaultCommit<Impl>::commitInsts()
         // (be removed from the ROB) at any time.
         if (head_inst->isSquashed()) {
 
-            DPRINTF(Commit, "Retiring squashed instruction from "
-                    "ROB.\n");
+            DPRINTF(Commit, "Retiring squashed instruction from ROB.\n");
 
             rob->retireHead(commit_thread);
 
@@ -1366,8 +1365,7 @@ DefaultCommit<Impl>::markCompletedInsts()
 }
 
 template <class Impl>
-void
-DefaultCommit<Impl>::updateComInstStats(DynInstPtr &inst)
+void DefaultCommit<Impl>::updateComInstStats(DynInstPtr &inst)
 {
     ThreadID tid = inst->threadNumber;
 
