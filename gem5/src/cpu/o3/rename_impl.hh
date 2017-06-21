@@ -57,6 +57,8 @@
 #include "debug/O3PipeView.hh"
 #include "params/DerivO3CPU.hh"
 
+#define BUFFER_SIZE 100
+
 using namespace std;
 
 template <class Impl>
@@ -200,6 +202,14 @@ DefaultRename<Impl>::regStats()
     numOfEliminatedInst
         .name(name() + ".numOfEliminatedInst")
         .desc("Number of Eliminated MOV instructions");
+
+    numOfNotImmediateMov
+        .name(name() + ".numOfNotImmediateMov")
+        .desc("Number of MOV instructions that don't have immediate value");
+
+    numOfMovHavingPC
+        .name(name() + ".numOfMovHavingPC")
+        .desc("Number of MOV instructions that have source reg as PC register (r15)");
 }
 
 template <class Impl>
@@ -729,6 +739,15 @@ DefaultRename<Impl>::renameInsts(ThreadID tid)
 			if(hasTwoOperands(inst))
 			{
 				numOfMOVInstTwoOperands++;
+
+				if(!hasImmediateValueInMov(inst))
+				{
+					numOfNotImmediateMov++;
+					if(hasInstPCReg(inst))
+					{
+						numOfMovHavingPC++;
+					}
+				}
 			}
 		}
 
@@ -997,6 +1016,13 @@ DefaultRename<Impl>::doSquash(const InstSeqNum &squashed_seq_num, ThreadID tid)
         // don't want to put these on the free list.
         if (hb_it->newPhysReg != hb_it->prevPhysReg || hb_it->isMovInst == true) 
 		{
+			/* Popping MOV instruction from buffer_for_stats */
+			if(hb_it->isMovInst)
+			{
+				assert(!buffer_for_stats.empty());
+				buffer_for_stats.pop_front();
+			}
+
             // Tell the rename map to set the architected register to the
             // previous physical register that it was renamed to.
             renameMap[tid]->setEntry(hb_it->archReg, hb_it->prevPhysReg);
@@ -1075,6 +1101,16 @@ DefaultRename<Impl>::removeFromHistory(InstSeqNum inst_seq_num, ThreadID tid)
 					hb_it->archReg, hb_it->newPhysReg, hb_it->instSeqNum);
 				/* Update commit rename map */
 				commitRenameMap[tid]->setEntry(hb_it->archReg, hb_it->newPhysReg);
+
+				/* Update committed instruction and microOp */
+				assert(!buffer_for_stats.empty());
+				DynInstPtr inst = buffer_for_stats.front();
+				buffer_for_stats.pop_front();
+
+				if(inst->isCountedForStats == true)
+				{
+					commit_ptr->updateComInstStats(inst);
+				}
 			}
 
 			if(!isMovEliUsed || 
@@ -1226,13 +1262,6 @@ DefaultRename<Impl>::renameDestRegs(DynInstPtr &inst, ThreadID tid)
 				rename_result = map->renameInt(flat_rel_dest_reg, renamedSrcPhyReg);
 				flat_uni_dest_reg = flat_rel_dest_reg;  // 1:1 mapping
 
-//				regIdxToClass(srcArchReg, &rel_src_reg);
-//				srcArchReg = tc->flattenIntIndex(rel_src_reg);
-//				/* Set RegState to Old */
-//				map->setIntMapOld(srcArchReg);
-//
-//				/* Set Dest reg state to New */
-//				map->setIntMapNew(flat_rel_dest_reg);
 				break;
 
 			  case FloatRegClass:
@@ -1240,13 +1269,6 @@ DefaultRename<Impl>::renameDestRegs(DynInstPtr &inst, ThreadID tid)
 				rename_result = map->renameFloat(flat_rel_dest_reg, renamedSrcPhyReg);
 				flat_uni_dest_reg = flat_rel_dest_reg + TheISA::FP_Reg_Base;
 
-//				regIdxToClass(srcArchReg, &rel_src_reg);
-//				srcArchReg = tc->flattenFloatIndex(rel_src_reg);
-//				/* Set RegState to Old */
-//				map->setFloatMapOld(srcArchReg);
-//
-//				/* Set Dest reg state to New */
-//				map->setFloatMapNew(flat_rel_dest_reg);
 				break;
 
 			  case CCRegClass:
@@ -1254,13 +1276,6 @@ DefaultRename<Impl>::renameDestRegs(DynInstPtr &inst, ThreadID tid)
 				rename_result = map->renameCC(flat_rel_dest_reg, renamedSrcPhyReg);
 				flat_uni_dest_reg = flat_rel_dest_reg + TheISA::CC_Reg_Base;
 
-//				regIdxToClass(srcArchReg, &rel_src_reg);
-//				srcArchReg = tc->flattenCCIndex(rel_src_reg);
-//				/* Set RegState to Old */
-//				map->setCCMapOld(srcArchReg);
-//
-//				/* Set Dest reg state to New */
-//				map->setCCMapNew(flat_rel_dest_reg);
 				break;
 
 			  case MiscRegClass:
@@ -1338,6 +1353,23 @@ DefaultRename<Impl>::renameDestRegs(DynInstPtr &inst, ThreadID tid)
 								inst->isEliminatedMovInst);
 
         historyBuffer[tid].push_front(hb_entry);
+
+		/* Push instruction to stat buffer */
+		if(buffer_for_stats.size() < BUFFER_SIZE && inst->isEliminatedMovInst)
+		{
+			if(dest_idx == 0)
+			{
+				inst->isCountedForStats = true;
+			}
+
+			buffer_for_stats.push_back(inst);
+		}
+		else if(buffer_for_stats.size() >= BUFFER_SIZE)
+		{
+			DPRINTF(Rename, "[tid:%u]: buffer_for_stats size: %d [sn:%i]\n"
+					, tid, buffer_for_stats.size(), inst->seqNum);
+			assert(buffer_for_stats.size() < BUFFER_SIZE);
+		}
 
         DPRINTF(Rename, "[tid:%u]: Adding instruction to history buffer "
                 "(size=%i), [sn:%lli].\n",tid,

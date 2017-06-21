@@ -130,8 +130,8 @@ class O3_ARM_v7a_3(DerivO3CPU):
     issueWidth = 8
     wbWidth = 8
     isIXUUsed = True
-    ixuWidth = 3
-    ixuDepth = 3
+    ixuWidth = 2
+    ixuDepth = 2
     isMovEliUsed = True
     fuPool = O3_ARM_v7a_FUP()
     iewToCommitDelay = 1

@@ -339,9 +339,6 @@ class DefaultIEW
 	/* Initialize IHT (IXU History Table */
 	void initializeIHT(IXU_history_entries *_IHT);
 
-	/* Update IXU History Table After Execution */
-	void updateIHTAfterExec(DynInstPtr &inst);
-
 	/* Move instruction from temp buffer[0] to buffer[1] */
 	void moveInstsToBuffer(void);
 
@@ -371,6 +368,9 @@ class DefaultIEW
 
 	/* count number of forwarding count stats */
 	void countNumOfForwarding(DynInstPtr &inst);
+
+	/* Set Phys Dest Reg Ready, because commit width can block IXU instructions */
+	void setDestRegReady(DynInstPtr &inst, ThreadID tid);
 
     /** Pointer to main time buffer used for backwards communication. */
     TimeBuffer<TimeStruct> *timeBuffer;

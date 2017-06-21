@@ -7,7 +7,8 @@ from multiprocessing import Process, Pool, Lock, Array
 
 print("****************** Making Script Files *****************")
 
-program_list_spec = ['bzip2', 'gcc', 'astar', 'mcf', 'libquantum', 'sjeng', 'cactusADM', 'calculix']
+#program_list_spec = ['bzip2', 'gcc', 'astar', 'mcf', 'libquantum', 'sjeng', 'cactusADM', 'calculix']
+program_list_spec = ['bzip2', 'astar', 'mcf', 'libquantum', 'sjeng', 'cactusADM', 'calculix']
 program_list_parcec = ['blackscholes', 'freqmine', 'fluidanimate']
 base_script_name = 'ARMv8O3Sim'
 numberOfProcess = 10

@@ -247,6 +247,9 @@ class BaseDynInst : public ExecContext, public RefCounted
 	/* This is for identification of mov instruction eliminated in rename stage */
 	bool isEliminatedMovInst;
 
+	/* This is for checking if the instruction is counted for committed instruction */
+	bool isCountedForStats;
+
     /////////////////////// TLB Miss //////////////////////
     /**
      * Saved memory requests (needed when the DTB address translation is

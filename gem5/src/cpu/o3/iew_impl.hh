@@ -1022,14 +1022,6 @@ DefaultIEW<Impl>::dispatchInsts(ThreadID tid)
     {
         inst = insts_to_dispatch.front();
 
-		/* If instruction is mov eliminated in rename satge, 
-		 * get rid of this instruction right now */
-//		if(inst->isEliminatedMovInst == true)
-//		{
-//            insts_to_dispatch.pop();
-//			continue;
-//		}
-
         if (dispatchStatus[tid] == Unblocking) {
             DPRINTF(IEW, "[tid:%i]: Issue: Examining instruction from skid "
                     "buffer\n", tid);
@@ -1450,6 +1442,9 @@ DefaultIEW<Impl>::executeInsts()
 						predictedTakenIncorrect++;
 					else
 						predictedNotTakenIncorrect++;
+
+					/* Setting branch instruction's destination ready and OXU */
+					setDestRegReady(inst, tid);
 				}
 			}
 
@@ -1458,6 +1453,8 @@ DefaultIEW<Impl>::executeInsts()
 			if(inst->isExecuted() && !inst->mispredicted())
 			{
 				writebackInstInIXU(inst);
+
+				setDestRegReady(inst, tid);
 			}
 
 			buffer_of_ixu[buf_idx].pop_front();
@@ -1714,9 +1711,19 @@ DefaultIEW<Impl>::writebackInsts()
     // Either have IEW have direct access to scoreboard, or have this
     // as part of backwards communication.
     for (int inst_num = 0; inst_num < wbWidth &&
-             toCommit->insts[inst_num]; inst_num++) {
+             toCommit->insts[inst_num]; inst_num++) 
+	{
         DynInstPtr inst = toCommit->insts[inst_num];
         ThreadID tid = inst->threadNumber;
+
+		if(inst->isExecInIXU == true)
+		{
+			DPRINTF(IEW, "IXU: Instruction already passed writeback stage [sn:%i]\n"
+					, inst->seqNum);
+
+			inst->isExecInIXU = false;
+			continue;
+		}
 
         DPRINTF(IEW, "Sending instructions to commit, [sn:%lli] PC %s.\n",
                 inst->seqNum, inst->pcState());
@@ -1742,28 +1749,16 @@ DefaultIEW<Impl>::writebackInsts()
 
 			if(isIXUUsed == true)
 			{
+				assert(inst->isExecInIXU == false);
 
-			if(inst->isExecInIXU == false)
-			{
 				int dependents = instQueue.wakeDependents(inst);
 
 				if (dependents) {
 					producerInst[tid]++;
 					consumerInst[tid]+= dependents;
 				}
-			}
-			else
-			{
-//				int dependents = instQueue.wakeDependents(inst);
-//
-//				if (dependents) {
-//					producerInst[tid]++;
-//					consumerInst[tid]+= dependents;
-//				}
 
-				updateIHTAfterExec(inst);
-			}
-
+				writebackCount[tid]++;
 			}
 			else
 			{
@@ -1773,9 +1768,9 @@ DefaultIEW<Impl>::writebackInsts()
 					producerInst[tid]++;
 					consumerInst[tid]+= dependents;
 				}
-			}
 
-            writebackCount[tid]++;
+				writebackCount[tid]++;
+			}
         }
     }
 }
@@ -2017,6 +2012,8 @@ bool DefaultIEW<Impl>::canInstEnterIXU(DynInstPtr &inst)
 	/* 1. instruction can be executed immediately */
 	if(inst->readyToIssue())
 	{
+		DPRINTF(IEW, "IXU: instruction is ready to issue to IXU [sn:%i]\n",
+				inst->seqNum);
 		return true;
 	}
 
@@ -2031,6 +2028,8 @@ bool DefaultIEW<Impl>::canInstEnterIXU(DynInstPtr &inst)
 		/* 1. If src reg is already ready state */
 		if(inst->isReadySrcRegIdx(src_idx))
 		{
+			DPRINTF(IEW, "IXU: physical src reg %d is ready [sn:%i]\n",src_reg,
+					inst->seqNum);
 			continue;
 		}
 		/* 2. src reg is not ready, but can get data of src reg in IXU */
@@ -2041,12 +2040,9 @@ bool DefaultIEW<Impl>::canInstEnterIXU(DynInstPtr &inst)
 			{
 				return false;
 			}
-//			/* Update longest left cycle in an instruction */
-//			else if(longest_left_cycle < IXU_history_table[src_reg]->left_cycle)
-//			{
-//				longest_left_cycle = IXU_history_table[src_reg]->left_cycle;
-//			}
 
+			DPRINTF(IEW, "IXU: physical src reg %d's leftcycle: %d [sn:%i]\n",
+					src_reg, IXU_history_table[src_reg]->left_cycle, inst->seqNum);
 			continue;
 		}
 		/* 3. src reg is never available when instruction run in IXU */
@@ -2078,7 +2074,7 @@ int DefaultIEW<Impl>::getLongestLeftCycle(DynInstPtr &inst)
 		int src_reg = (int)inst->getSrcRegister(src_idx);
 		int src_cycle = IXU_history_table[src_reg]->left_cycle;
 
-		assert(src_cycle <= 2);
+		assert(src_cycle <= ixuDepth-1);
 
 		/* Update longest left cycle among src reg requiring result */
 		if(longest_left_cycle < src_cycle)
@@ -2104,20 +2100,6 @@ void DefaultIEW<Impl>::setDestRegInIHT(DynInstPtr &inst)
 
 		IXU_history_table[dest_reg]->execution_type = IXU;
 		IXU_history_table[dest_reg]->left_cycle = getLongestLeftCycle(inst) + 1;
-	}
-}
-
-template <typename Impl>
-void DefaultIEW<Impl>::updateIHTAfterExec(DynInstPtr &inst)
-{
-	int num_of_dest_regs = (int)inst->numDestRegs();
-
-	inst->isExecInIXU = false;
-
-	for(int dest_idx = 0; dest_idx < num_of_dest_regs; dest_idx++)
-	{
-		int dest_reg = (int)inst->getDestRegister(dest_idx);
-		IXU_history_table[dest_reg]->execution_type = OXU;
 	}
 }
 
@@ -2272,6 +2254,36 @@ void DefaultIEW<Impl>::countNumOfForwarding(DynInstPtr &inst)
 		{
 			numOfForwardingInIXU++;
 		}
+	}
+}
+
+template <typename Impl>
+void DefaultIEW<Impl>::setDestRegReady(DynInstPtr &inst, ThreadID tid)
+{
+	iewInstsToCommit[tid]++;
+	// Notify potential listeners that execution is complete for this
+	// instruction.
+	ppToCommit->notify(inst);
+
+	if (!inst->isSquashed() && inst->isExecuted() && inst->getFault() == NoFault
+			&& inst->isExecInIXU == true)
+	{
+		int num_of_dest_regs = inst->numDestRegs();
+		for(int i=0; i<num_of_dest_regs; i++)
+		{
+			int dest_reg = (int)inst->renamedDestRegIdx(i);
+
+			DPRINTF(IEW, "Setting Destination Register %i [sn:%i]\n",
+					inst->renamedDestRegIdx(i), inst->seqNum);
+
+			/* make as ready */
+			scoreboard->setReg(dest_reg);
+
+			/* update execution type of destination reg as OXU */
+			IXU_history_table[dest_reg]->execution_type = OXU;
+		}
+
+		writebackCount[tid]++;
 	}
 }
 

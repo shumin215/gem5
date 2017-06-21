@@ -363,7 +363,7 @@ static SyscallDesc syscallDescs32[] = {
     /* 239 */ SyscallDesc("sendfile64", unimplementedFunc),
     /* 240 */ SyscallDesc("futex", ignoreFunc, SyscallDesc::WarnOnce),
     /* 241 */ SyscallDesc("sched_setaffinity", unimplementedFunc),
-    /* 242 */ SyscallDesc("sched_getaffinity", unimplementedFunc),
+    /* 242 */ SyscallDesc("sched_getaffinity", ignoreFunc),
     /* 243 */ SyscallDesc("io_setup", unimplementedFunc),
     /* 244 */ SyscallDesc("io_destroy", unimplementedFunc),
     /* 245 */ SyscallDesc("io_getevents", unimplementedFunc),

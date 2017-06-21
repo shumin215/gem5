@@ -342,6 +342,21 @@ class DefaultCommit
     /** Reads the micro PC of a specific thread. */
     Addr microPC(ThreadID tid) { return pc[tid].microPC(); }
 
+	/* Increment number of instsCommitted */
+	void incrementInstsCommitted(ThreadID tid)
+	{
+		this->instsCommitted[tid]++;
+	}
+
+	/* Increment number of opsCommitted */
+	void incrementOpsCommitted(ThreadID tid)
+	{
+		this->opsCommitted[tid]++;
+	}
+
+    /** Updates commit stats based on this instruction. */
+    void updateComInstStats(DynInstPtr &inst);
+
   private:
     /** Time buffer interface. */
     TimeBuffer<TimeStruct> *timeBuffer;
@@ -488,8 +503,8 @@ class DefaultCommit
         a possible livelock senario.  */
     bool avoidQuiesceLiveLock;
 
-    /** Updates commit stats based on this instruction. */
-    void updateComInstStats(DynInstPtr &inst);
+//    /** Updates commit stats based on this instruction. */
+//    void updateComInstStats(DynInstPtr &inst);
 
     /** Stat for the total number of squashed instructions discarded by commit.
      */

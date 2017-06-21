@@ -63,19 +63,34 @@ echo "*${spec_benchmark_path}/429.mcf/exe/mcf_base.arm;${parsec_benchmark_path}/
 echo "*${spec_benchmark_path}/458.sjeng/exe/sjeng_base.arm;${spec_benchmark_path}/473.astar/exe/astar_base.arm* *${spec_source_root}/458.sjeng/data/ref/input/ref.txt;${spec_source_root}/473.astar/data/ref/input/rivers.cfg* ** " > sjeng_astar
 echo "*${spec_benchmark_path}/436.cactusADM/exe/cactusADM_base.arm;${parsec_benchmark_path}/pkgs/apps/blackscholes/inst/gcc-arm.gcc-arm/bin/blackscholes* *${spec_source_root}/436.cactusADM/data/ref/input/benchADM.par;1 ${parsec_source_root}/pkgs/apps/blackscholes/inputs/in_10M.txt prices.txt* ** " > cactusADM_blackscholes
 
+
 for bench in ${Running_app}; do
 
-ixuWidth_num="3"
+ixuWidth_num="2"
 for ixuWidth in ${ixuWidth_num}; do
 
-ixuDepth_num="3"
+ixuDepth_num="2"
 for ixuDepth in ${ixuDepth_num}; do
+
+	if [ ${ixuWidth} -lt ${ixuDepth} ]
+	then
+		echo "IXU Width: ${ixuWidth}, IXU Depth: ${ixuDepth} Unnecessary!";
+		continue;
+	fi
+
+forward_conf="10000000"
+for forwardNum in ${forward_conf}; do
+
+mov_conf="True"
+for movElimination in ${mov_conf}; do
             
-    echo "######## ${bench} IXU width: ${ixuWidth}, IXU depth: ${ixuDepth} ########"
+    echo "######## ${bench} IXU width: ${ixuWidth}, IXU depth: ${ixuDepth}, MOV Elimination: ${movElimination} ########"
 
     # Modify configure file
     echo "{if (NR == 133) print \"    ixuWidth = ${ixuWidth}\" > \"${config_root}/O3_ARM_v7a.abc\";
            else if (NR == 134) print \"    ixuDepth = ${ixuDepth}\" > \"${config_root}/O3_ARM_v7a.abc\";
+           else if (NR == 132) print \"    isIXUUsed = ${movElimination}\" > \"${config_root}/O3_ARM_v7a.abc\";
+           else if (NR == 135) print \"    isMovEliUsed = ${movElimination}\" > \"${config_root}/O3_ARM_v7a.abc\";
            else print \$0 > \"${config_root}/O3_ARM_v7a.abc\"}" > awkprog
 
     echo "{print \$0 > \"${config_root}/O3_ARM_v7a.py\"}" > awkprog1
@@ -88,9 +103,13 @@ for ixuDepth in ${ixuDepth_num}; do
     args=`awk -F'*' '{print $4}' $bench`
     stdin=`awk -F'*' '{print $6}' $bench`
                                                                                                                                            
-    echo `gem5.opt --outdir=${output_path}_${config_name} --stats-file=${bench}_${config_name} ${se_file_path}/se.py --fast-forward=10000000 --cpu-type=arm_detailed --sys-clock=1GHz --cpu-clock=1GHz --num-cpus=1 --caches --l2cache --mem-type=DDR3_1600_8x8 --mem-size=8192MB --maxinst=$MAX_INST --cmd=$exe --options="${args}" &> $simresult_root/${bench}_${config_name}`
+    echo `gem5.opt --outdir=${output_path}_${config_name}_FF${forwardNum}_Mixed-${movElimination}_W${ixuWidth}D${ixuDepth} --stats-file=${bench}_${config_name}_FF${forwardNum}_Mixed-${movElimination}_W${ixuWidth}D${ixuDepth} ${se_file_path}/se.py --fast-forward=${forwardNum} --cpu-type=arm_detailed --sys-clock=1GHz --cpu-clock=1GHz --num-cpus=1 --caches --l2cache --mem-type=DDR3_1600_8x8 --mem-size=8192MB --maxinst=$MAX_INST --cmd=$exe --options="${args}" &> $simresult_root/${bench}_${config_name}_FF${forwardNum}_Mixed-${movElimination}_W${ixuWidth}D${ixuDepth}`
                                                                                                                                            
     echo "**************** ${bench} is finished **************"
+
+done
+
+done
 
 done
 
@@ -100,4 +119,3 @@ done
 
 #rm ${config_root}/O3_ARM_v7a.abc
 
-#rm bzip2 gcc astar mcf hmmer libquantum sjeng soplex cactusADM calculix blackscholes freqmine fluidanimate

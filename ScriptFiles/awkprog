@@ -1,3 +1,5 @@
-{if (NR == 133) print "    ixuWidth = 3" > "/home/shumin/LG_Project/gem5/configs/common/O3_ARM_v7a.abc";
-           else if (NR == 134) print "    ixuDepth = 3" > "/home/shumin/LG_Project/gem5/configs/common/O3_ARM_v7a.abc";
+{if (NR == 133) print "    ixuWidth = 2" > "/home/shumin/LG_Project/gem5/configs/common/O3_ARM_v7a.abc";
+           else if (NR == 134) print "    ixuDepth = 2" > "/home/shumin/LG_Project/gem5/configs/common/O3_ARM_v7a.abc";
+           else if (NR == 132) print "    isIXUUsed = True" > "/home/shumin/LG_Project/gem5/configs/common/O3_ARM_v7a.abc";
+           else if (NR == 135) print "    isMovEliUsed = True" > "/home/shumin/LG_Project/gem5/configs/common/O3_ARM_v7a.abc";
            else print $0 > "/home/shumin/LG_Project/gem5/configs/common/O3_ARM_v7a.abc"}

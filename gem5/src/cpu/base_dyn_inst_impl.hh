@@ -105,6 +105,9 @@ BaseDynInst<Impl>::initVars()
 	/* This is for MOV Elimination */
 	isEliminatedMovInst = false;
 
+	/* This is for checking if the instruction is counted for committed instruction */
+	isCountedForStats = false;
+
     lqIdx = -1;
     sqIdx = -1;
 

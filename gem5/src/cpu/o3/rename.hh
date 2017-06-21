@@ -115,6 +115,9 @@ class DefaultRename
         SerializeStall
     };
 
+	/* Buffer for getting stats */
+	InstQueue buffer_for_stats;
+
   private:
     /** Rename status. */
     RenameStatus _status;
@@ -583,9 +586,12 @@ class DefaultRename
 	Stats::Scalar numOfAllMOVInst;
 	/* Number of MOV instructions having only two operands*/
 	Stats::Scalar numOfMOVInstTwoOperands;
-
 	/* Number of Eliminated Mov instructions */
 	Stats::Scalar numOfEliminatedInst;
+	/* Number of MOV instructions that don't have immediate value */
+	Stats::Scalar numOfNotImmediateMov;
+	/* Number of MOV instructions that have source reg as PC register (r15) */
+	Stats::Scalar numOfMovHavingPC;
 };
 
 #endif // __CPU_O3_RENAME_HH__
