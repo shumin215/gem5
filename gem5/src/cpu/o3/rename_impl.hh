@@ -191,10 +191,6 @@ DefaultRename<Impl>::regStats()
         .name(name() + ".numOfMOVInst")
         .desc("Number of MOV instructions");
 
-    numOfAllMOVInst
-        .name(name() + ".numOfMOVRelativeInst")
-        .desc("Number of MOV relative instructions");
-
     numOfMOVInstTwoOperands
         .name(name() + ".numOfMOVInstTwoOperands")
         .desc("Number of MOV instructions having only two operands");
@@ -206,6 +202,10 @@ DefaultRename<Impl>::regStats()
     numOfNotImmediateMov
         .name(name() + ".numOfNotImmediateMov")
         .desc("Number of MOV instructions that don't have immediate value");
+
+    numOfImmediateMov
+        .name(name() + ".numOfImmediateMov")
+        .desc("Number of MOV instructions that have immediate value");
 
     numOfMovHavingPC
         .name(name() + ".numOfMovHavingPC")
@@ -736,7 +736,7 @@ DefaultRename<Impl>::renameInsts(ThreadID tid)
 		{
 			numOfMOVInst++;
 
-			if(hasTwoOperands(inst))
+			if(hasTwoOperands(inst) && !hasInstPCReg(inst))
 			{
 				numOfMOVInstTwoOperands++;
 
@@ -747,6 +747,10 @@ DefaultRename<Impl>::renameInsts(ThreadID tid)
 					{
 						numOfMovHavingPC++;
 					}
+				}
+				else
+				{
+					numOfImmediateMov++;
 				}
 			}
 		}
@@ -1751,7 +1755,6 @@ bool DefaultRename<Impl>::isMovInstruction(DynInstPtr &inst)
 	/* Count instruction relative to mov, such as movcc, movls, moveq.... */
 	if(inst_disassembly.find("mov") != string::npos)
 	{
-		numOfAllMOVInst++;
 	}
 
 	if(op_string.compare("mov") == 0)

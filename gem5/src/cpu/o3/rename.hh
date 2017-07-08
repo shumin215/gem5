@@ -590,6 +590,8 @@ class DefaultRename
 	Stats::Scalar numOfEliminatedInst;
 	/* Number of MOV instructions that don't have immediate value */
 	Stats::Scalar numOfNotImmediateMov;
+	/* Number of MOV instructions having immediate value */
+	Stats::Scalar numOfImmediateMov;
 	/* Number of MOV instructions that have source reg as PC register (r15) */
 	Stats::Scalar numOfMovHavingPC;
 };
