@@ -756,18 +756,6 @@ DefaultRename<Impl>::renameInsts(ThreadID tid)
 		{
 			numOfMOVInst++;
 
-			/* for motivation experiments of mov elimination */
-			if(isMOVEQ(inst))
-				numOfMOVEQ++;
-			else if(isMOVNE(inst))
-				numOfMOVNE++;
-			else if(isMOVLE(inst))
-				numOfMOVLE++;
-			else if(isMOVGT(inst))
-				numOfMOVGT++;
-			else if(isMOVShift(inst))
-				numOfMOVShift++;
-
 			if(hasTwoOperands(inst) && !hasInstPCReg(inst))
 			{
 				numOfMOVInstTwoOperands++;
@@ -786,6 +774,17 @@ DefaultRename<Impl>::renameInsts(ThreadID tid)
 				}
 			}
 		}
+		/* for motivation experiments of mov elimination */
+		else if(isMOVEQ(inst))
+			numOfMOVEQ++;
+		else if(isMOVNE(inst))
+			numOfMOVNE++;
+		else if(isMOVLE(inst))
+			numOfMOVLE++;
+		else if(isMOVGT(inst))
+			numOfMOVGT++;
+		else if(isMOVShift(inst))
+			numOfMOVShift++;
 
         renameSrcRegs(inst, inst->threadNumber);
 
