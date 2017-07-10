@@ -330,6 +330,12 @@ class DefaultRename
 	/* Update Inst Seq Num */
 	void updateInstSeqNum(InstSeqNum &inst_seq_num, ThreadID tid);
 
+	/* check if mov instruction is MOVEQ */
+	bool isMOVEQ(DynInstPtr &inst);
+
+	/* check if mov instruction is MOVNE */
+	bool isMOVNE(DynInstPtr &inst);
+
     /** Either serializes on the next instruction available in the InstQueue,
      * or records that it must serialize on the next instruction to enter
      * rename.
@@ -594,6 +600,11 @@ class DefaultRename
 	Stats::Scalar numOfImmediateMov;
 	/* Number of MOV instructions that have source reg as PC register (r15) */
 	Stats::Scalar numOfMovHavingPC;
+
+	/* Number of MOVEQ instructions */
+	Stats::Scalar numOfMOVEQ;
+	/* Number of MOVNE instructions */
+	Stats::Scalar numOfMOVNE;
 };
 
 #endif // __CPU_O3_RENAME_HH__

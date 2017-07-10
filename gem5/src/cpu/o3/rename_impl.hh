@@ -210,6 +210,14 @@ DefaultRename<Impl>::regStats()
     numOfMovHavingPC
         .name(name() + ".numOfMovHavingPC")
         .desc("Number of MOV instructions that have source reg as PC register (r15)");
+
+    numOfMOVEQ
+        .name(name() + ".numOfMOVEQ")
+        .desc("Number of MOVEQ instructions");
+
+    numOfMOVNE
+        .name(name() + ".numOfMOVNE")
+        .desc("Number of MOVNE instructions");
 }
 
 template <class Impl>
@@ -735,6 +743,16 @@ DefaultRename<Impl>::renameInsts(ThreadID tid)
 		if(isMovInstruction(inst))
 		{
 			numOfMOVInst++;
+
+			/* if MOVEQ instruction */
+			if(isMOVEQ(inst))
+			{
+				numOfMOVEQ++;
+			}
+			else if(isMOVNE(inst))
+			{
+				numOfMOVNE++;
+			}
 
 			if(hasTwoOperands(inst) && !hasInstPCReg(inst))
 			{
@@ -2001,6 +2019,34 @@ void DefaultRename<Impl>::updateInstSeqNum(InstSeqNum &inst_seq_num, ThreadID ti
 		/* Decrement iterator */
 		hb_iter--;
 	}
+}
+
+template <typename Impl>
+bool DefaultRename<Impl>::isMOVEQ(DynInstPtr &inst)
+{
+	string inst_disassembly = inst->staticInst->disassemble(inst->instAddr());
+	string op_string = getOpString(inst_disassembly, " ");
+
+	if(op_string.compare("moveq") == 0)
+	{
+		return true;
+	}
+	else
+		return false;
+}
+
+template <typename Impl>
+bool DefaultRename<Impl>::isMOVNE(DynInstPtr &inst)
+{
+	string inst_disassembly = inst->staticInst->disassemble(inst->instAddr());
+	string op_string = getOpString(inst_disassembly, " ");
+
+	if(op_string.compare("movne") == 0)
+	{
+		return true;
+	}
+	else
+		return false;
 }
 
 #endif//__CPU_O3_RENAME_IMPL_HH__
