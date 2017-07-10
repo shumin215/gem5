@@ -336,6 +336,15 @@ class DefaultRename
 	/* check if mov instruction is MOVNE */
 	bool isMOVNE(DynInstPtr &inst);
 
+	/* check if mov instruction is MOVLE */
+	bool isMOVLE(DynInstPtr &inst);
+
+	/* check if mov instruction is MOVGT */
+	bool isMOVGT(DynInstPtr &inst);
+
+	/* check if mov instruction is MOV shift */
+	bool isMOVShift(DynInstPtr &inst);
+
     /** Either serializes on the next instruction available in the InstQueue,
      * or records that it must serialize on the next instruction to enter
      * rename.
@@ -605,6 +614,12 @@ class DefaultRename
 	Stats::Scalar numOfMOVEQ;
 	/* Number of MOVNE instructions */
 	Stats::Scalar numOfMOVNE;
+	/* Number of MOVNE instructions */
+	Stats::Scalar numOfMOVLE;
+	/* Number of MOVNE instructions */
+	Stats::Scalar numOfMOVGT;
+	/* Number of MOV shift instructions */
+	Stats::Scalar numOfMOVShift;
 };
 
 #endif // __CPU_O3_RENAME_HH__

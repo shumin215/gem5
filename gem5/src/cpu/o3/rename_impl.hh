@@ -218,6 +218,18 @@ DefaultRename<Impl>::regStats()
     numOfMOVNE
         .name(name() + ".numOfMOVNE")
         .desc("Number of MOVNE instructions");
+
+    numOfMOVLE
+        .name(name() + ".numOfMOVLE")
+        .desc("Number of MOVLE instructions");
+
+    numOfMOVGT
+        .name(name() + ".numOfMOVGT")
+        .desc("Number of MOVGT instructions");
+
+    numOfMOVShift
+        .name(name() + ".numOfMOVShift")
+        .desc("Number of MOV shift instructions");
 }
 
 template <class Impl>
@@ -744,15 +756,17 @@ DefaultRename<Impl>::renameInsts(ThreadID tid)
 		{
 			numOfMOVInst++;
 
-			/* if MOVEQ instruction */
+			/* for motivation experiments of mov elimination */
 			if(isMOVEQ(inst))
-			{
 				numOfMOVEQ++;
-			}
 			else if(isMOVNE(inst))
-			{
 				numOfMOVNE++;
-			}
+			else if(isMOVLE(inst))
+				numOfMOVLE++;
+			else if(isMOVGT(inst))
+				numOfMOVGT++;
+			else if(isMOVShift(inst))
+				numOfMOVShift++;
 
 			if(hasTwoOperands(inst) && !hasInstPCReg(inst))
 			{
@@ -2042,6 +2056,49 @@ bool DefaultRename<Impl>::isMOVNE(DynInstPtr &inst)
 	string op_string = getOpString(inst_disassembly, " ");
 
 	if(op_string.compare("movne") == 0)
+	{
+		return true;
+	}
+	else
+		return false;
+}
+
+template <typename Impl>
+bool DefaultRename<Impl>::isMOVLE(DynInstPtr &inst)
+{
+	string inst_disassembly = inst->staticInst->disassemble(inst->instAddr());
+	string op_string = getOpString(inst_disassembly, " ");
+
+	if(op_string.compare("movle") == 0)
+	{
+		return true;
+	}
+	else
+		return false;
+}
+
+template <typename Impl>
+bool DefaultRename<Impl>::isMOVGT(DynInstPtr &inst)
+{
+	string inst_disassembly = inst->staticInst->disassemble(inst->instAddr());
+	string op_string = getOpString(inst_disassembly, " ");
+
+	if(op_string.compare("movgt") == 0)
+	{
+		return true;
+	}
+	else
+		return false;
+}
+
+template <typename Impl>
+bool DefaultRename<Impl>::isMOVShift(DynInstPtr &inst)
+{
+	string inst_disassembly = inst->staticInst->disassemble(inst->instAddr());
+	string op_string = getOpString(inst_disassembly, " ");
+
+	if(inst_disassembly.find("LSL") != string::npos || 
+			inst_disassembly.find("LSR") != string::npos)
 	{
 		return true;
 	}
