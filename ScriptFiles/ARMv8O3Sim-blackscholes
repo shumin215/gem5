@@ -1,5 +1,9 @@
 #!/bin/bash
 
+#######################################################
+# 	Fast Forward: 500000000
+######################################################
+
 #Configurations
 MAX_INST=500000000
 
@@ -103,7 +107,7 @@ for movElimination in ${mov_conf}; do
     args=`awk -F'*' '{print $4}' $bench`
     stdin=`awk -F'*' '{print $6}' $bench`
                                                                                                                                            
-    echo `gem5.opt --outdir=${output_path}_${config_name}_FF${forwardNum}_Mixed-${movElimination}_W${ixuWidth}D${ixuDepth} --stats-file=${bench}_${config_name}_FF${forwardNum}_Mixed-${movElimination}_W${ixuWidth}D${ixuDepth} ${se_file_path}/se.py --fast-forward=${forwardNum} --cpu-type=arm_detailed --sys-clock=1GHz --cpu-clock=1GHz --num-cpus=1 --caches --l2cache --mem-type=DDR3_1600_8x8 --mem-size=8192MB --maxinst=$MAX_INST --cmd=$exe --options="${args}" &> $simresult_root/${bench}_${config_name}_FF${forwardNum}_Mixed-${movElimination}_W${ixuWidth}D${ixuDepth}`
+    echo `gem5.opt --outdir=${output_path}_${config_name}_Mixed-${movElimination}_W${ixuWidth}D${ixuDepth} --stats-file=${bench}_${config_name}_Mixed-${movElimination}_W${ixuWidth}D${ixuDepth} ${se_file_path}/se.py --fast-forward=${forwardNum} --cpu-type=arm_detailed --sys-clock=1GHz --cpu-clock=1GHz --num-cpus=1 --caches --l2cache --mem-type=DDR3_1600_8x8 --mem-size=8192MB --maxinst=$MAX_INST --cmd=$exe --options="${args}" &> $simresult_root/${bench}_${config_name}_Mixed-${movElimination}_W${ixuWidth}D${ixuDepth}`
                                                                                                                                            
     echo "**************** ${bench} is finished **************"
 
