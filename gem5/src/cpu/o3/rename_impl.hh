@@ -230,6 +230,10 @@ DefaultRename<Impl>::regStats()
     numOfMOVShift
         .name(name() + ".numOfMOVShift")
         .desc("Number of MOV shift instructions");
+
+    numOfShiftOp
+        .name(name() + ".numOfShiftOp")
+        .desc("Number of shift instructions");
 }
 
 template <class Impl>
@@ -773,6 +777,9 @@ DefaultRename<Impl>::renameInsts(ThreadID tid)
 					numOfImmediateMov++;
 				}
 			}
+
+			if(isMOVShift(inst))
+				numOfMOVShift++;
 		}
 		/* for motivation experiments of mov elimination */
 		else if(isMOVEQ(inst))
@@ -785,6 +792,10 @@ DefaultRename<Impl>::renameInsts(ThreadID tid)
 			numOfMOVGT++;
 		else if(isMOVShift(inst))
 			numOfMOVShift++;
+
+		/* if instruction has shift operations */
+		if(isMOVShift(inst))
+			numOfShiftOp++;
 
         renameSrcRegs(inst, inst->threadNumber);
 

@@ -620,6 +620,8 @@ class DefaultRename
 	Stats::Scalar numOfMOVGT;
 	/* Number of MOV shift instructions */
 	Stats::Scalar numOfMOVShift;
+	/* Number of Shift Operations */
+	Stats::Scalar numOfShiftOp;
 };
 
 #endif // __CPU_O3_RENAME_HH__
