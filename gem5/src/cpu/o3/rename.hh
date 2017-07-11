@@ -345,6 +345,9 @@ class DefaultRename
 	/* check if mov instruction is MOV shift */
 	bool isMOVShift(DynInstPtr &inst);
 
+	/* check if instruction has shift operations*/
+	bool isShiftOp(DynInstPtr &inst);
+
     /** Either serializes on the next instruction available in the InstQueue,
      * or records that it must serialize on the next instruction to enter
      * rename.

@@ -777,9 +777,6 @@ DefaultRename<Impl>::renameInsts(ThreadID tid)
 					numOfImmediateMov++;
 				}
 			}
-
-			if(isMOVShift(inst))
-				numOfMOVShift++;
 		}
 		/* for motivation experiments of mov elimination */
 		else if(isMOVEQ(inst))
@@ -794,7 +791,7 @@ DefaultRename<Impl>::renameInsts(ThreadID tid)
 			numOfMOVShift++;
 
 		/* if instruction has shift operations */
-		if(isMOVShift(inst))
+		if(isShiftOp(inst))
 			numOfShiftOp++;
 
         renameSrcRegs(inst, inst->threadNumber);
@@ -2103,6 +2100,26 @@ bool DefaultRename<Impl>::isMOVGT(DynInstPtr &inst)
 
 template <typename Impl>
 bool DefaultRename<Impl>::isMOVShift(DynInstPtr &inst)
+{
+	string inst_disassembly = inst->staticInst->disassemble(inst->instAddr());
+	string op_string = getOpString(inst_disassembly, " ");
+
+	if(inst_disassembly.find("mov") != string::npos)
+	{
+		if(inst_disassembly.find("LSL") != string::npos || 
+				inst_disassembly.find("LSR") != string::npos)
+		{
+			return true;
+		}
+		else
+			return false;
+	}
+	else
+		return false;
+}
+
+template <typename Impl>
+bool DefaultRename<Impl>::isShiftOp(DynInstPtr &inst)
 {
 	string inst_disassembly = inst->staticInst->disassemble(inst->instAddr());
 	string op_string = getOpString(inst_disassembly, " ");

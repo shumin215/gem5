@@ -232,7 +232,9 @@ BPredUnit::predict(const StaticInstPtr &inst, const InstSeqNum &seqNum,
             DPRINTF(Branch, "[tid:%i]: Instruction %s is a return, "
                     "RAS predicted target: %s, RAS index: %i.\n",
                     tid, pc, target, predict_record.RASIndex);
-        } else {
+        } 
+		else 
+		{
             ++BTBLookups;
 
             if (inst->isCall()) {
