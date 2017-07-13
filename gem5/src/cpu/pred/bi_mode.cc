@@ -55,6 +55,14 @@ BiModeBP::BiModeBP(const BiModeBPParams *params)
     takenCounters.resize(globalPredictorSize);
     notTakenCounters.resize(globalPredictorSize);
 
+	/* Initialize BCE */
+	BCE.resize(BCESize);
+
+	for(int i=0; i<BCESize; i++)
+	{
+		BCE[i].setBits(BCECtrBits);
+	}
+
     for (int i = 0; i < choicePredictorSize; ++i) {
         choiceCounters[i].setBits(choiceCtrBits);
     }
@@ -67,6 +75,7 @@ BiModeBP::BiModeBP(const BiModeBPParams *params)
     choiceHistoryMask = choicePredictorSize - 1;
     globalHistoryMask = globalPredictorSize - 1;
 
+	/* ULL(1) = 1 */
     choiceThreshold = (ULL(1) << (choiceCtrBits - 1)) - 1;
     takenThreshold = (ULL(1) << (choiceCtrBits - 1)) - 1;
     notTakenThreshold = (ULL(1) << (choiceCtrBits - 1)) - 1;
@@ -200,6 +209,22 @@ BiModeBP::update(ThreadID tid, Addr branchAddr, bool taken, void *bpHistory,
     }
 
     if (history->finalPred == taken) {
+/***************************************************************
+ * This is not exact, because the bi-mode paper represents that
+ * the choice predictor is always updated with the branch outcome,
+ * except that when the choice is opposite to the branch outcome 
+ * but the selected counter of the direction predictors makes 
+ * a correct final prediction. This is partial update policy is
+ * particularly effective when the total hardware budget is small.
+ *
+ * Consequently, there are different three types of bi-mode predictor 
+ * 1. Paper of Bi-mode predictor
+ * 2. Following comment 
+ * 3. Implementation in gem5
+ *
+ * 2017. 07. 12 Kyungmin Lee
+ * **************************************************************/
+
        /* If the final prediction matches the actual branch's
         * outcome and the choice predictor matches the final
         * outcome, we update the choice predictor, otherwise it
@@ -210,7 +235,8 @@ BiModeBP::update(ThreadID tid, Addr branchAddr, bool taken, void *bpHistory,
         * the whole point of the bi-mode predictor is to identify the
         * atypical case when a branch deviates from its bias.
         */
-        if (history->finalPred == history->takenUsed) {
+        if (history->finalPred == history->takenUsed) 
+		{
             if (taken) {
                 choiceCounters[choiceHistoryIdx].increment();
             } else {

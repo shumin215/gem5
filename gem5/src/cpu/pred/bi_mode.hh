@@ -109,6 +109,12 @@ class BiModeBP : public BPredUnit
     unsigned choiceThreshold;
     unsigned takenThreshold;
     unsigned notTakenThreshold;
+
+	/******** Branch Confidence Estimator (BCE) **********/
+	std::vector<SatCounter> BCE;
+
+	unsigned BCESize;
+	unsigned BCECtrBits;
 };
 
 #endif // __CPU_PRED_BI_MODE_PRED_HH__

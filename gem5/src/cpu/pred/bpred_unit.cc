@@ -214,7 +214,9 @@ BPredUnit::predict(const StaticInstPtr &inst, const InstSeqNum &seqNum,
 
     // Now lookup in the BTB or RAS.
     if (pred_taken) {
-        if (inst->isReturn()) {
+		/* RAS */
+        if (inst->isReturn()) 
+		{
             ++usedRAS;
             predict_record.wasReturn = true;
             // If it's a function return call, then look up the address
@@ -232,7 +234,10 @@ BPredUnit::predict(const StaticInstPtr &inst, const InstSeqNum &seqNum,
             DPRINTF(Branch, "[tid:%i]: Instruction %s is a return, "
                     "RAS predicted target: %s, RAS index: %i.\n",
                     tid, pc, target, predict_record.RASIndex);
-        } else {
+        } 
+		/* BTB */
+		else 
+		{
             ++BTBLookups;
 
             if (inst->isCall()) {
@@ -248,6 +253,7 @@ BPredUnit::predict(const StaticInstPtr &inst, const InstSeqNum &seqNum,
                         tid, pc, pc, RAS[tid].topIdx());
             }
 
+			/* Direct */
             if (inst->isDirectCtrl() || !useIndirect) {
                 // Check BTB on direct branches
                 if (BTB.valid(pc.instAddr(), tid)) {
@@ -274,9 +280,12 @@ BPredUnit::predict(const StaticInstPtr &inst, const InstSeqNum &seqNum,
                         RAS[tid].pop();
                         predict_record.pushedRAS = false;
                     }
+					/* pc = pc + 4 */
                     TheISA::advancePC(target, inst);
                 }
-            } else {
+            } 
+			/* Indirect */
+			else {
                 predict_record.wasIndirect = true;
                 ++indirectLookups;
                 //Consult indirect predictor on indirect control

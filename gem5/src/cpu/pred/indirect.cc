@@ -168,6 +168,8 @@ IndirectPredictor::getSetIndex(Addr br_addr, unsigned ghr, ThreadID tid)
         hash ^= ghr;
     }
     if (hashTargets) {
+		/* pathLength = 3, (default value) */
+		/* 8 / 3 = 2 */
         unsigned hash_shift = floorLog2(numSets) / pathLength;
         for (int i = t_info.pathHist.size()-1, p = 0;
              i >= 0 && p < pathLength; i--, p++) {
