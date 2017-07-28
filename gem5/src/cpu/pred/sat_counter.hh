@@ -102,6 +102,11 @@ class SatCounter
         }
     }
 
+	void setInitialVal(int val)
+	{
+		this->initialVal = val;
+	}
+
     /**
      * Read the counter's value.
      */

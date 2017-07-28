@@ -395,16 +395,12 @@ BPredUnit::update(const InstSeqNum &done_sn, ThreadID tid)
 	{
 		/* If high confidence branch */
 		if(isEstimatedHighConfidence(predHist[tid].back().bpHistory) == true)
-		{
 			/* if high confidence branch is correct */
 			highConfEstCorrect++;
-		} 
 		/* If low confidence branch */
 		else
-		{
 			/* If low confidence branch is correct */
 			lowConfEstIncorrect++;
-		}
 
 		/* Update BCE */
 		updateBCE(tid, predHist[tid].back().pc, true, predHist[tid].back().bpHistory);
@@ -445,11 +441,12 @@ BPredUnit::squash(const InstSeqNum &squashed_sn, ThreadID tid)
 
 		/* If high confidence branch */
 		if(isEstimatedHighConfidence(pred_hist.front().bpHistory))
-		{
 			highConfEstIncorrect++;
-		}
 		else
 			lowConfEstCorrect++;
+
+		/* Update BCE */
+		updateBCE(tid, pred_hist.front().pc, false, pred_hist.front().bpHistory);
 
         // This call should delete the bpHistory.
         squash(tid, pred_hist.front().bpHistory);

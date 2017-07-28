@@ -63,6 +63,7 @@ BiModeBP::BiModeBP(const BiModeBPParams *params)
 	for(int i=0; i<BCESize; i++)
 	{
 		BCE[i].setBits(BCECtrBits);
+		BCE[i].setInitialVal(0);
 	}
 
     for (int i = 0; i < choicePredictorSize; ++i) {
@@ -285,7 +286,9 @@ BiModeBPParams::create()
 
 bool BiModeBP::lookupBCE(ThreadID tid, Addr branchAddr, void* &bp_history)
 {
-	unsigned GHR = static_cast<BiModeBP::BPHistory*>(bp_history)->globalHistoryReg;
+    BPHistory *history = static_cast<BPHistory*>(bp_history);
+
+	unsigned GHR = history->globalHistoryReg;
     unsigned BCEIdx = (((branchAddr >> instShiftAmt)
                                 ^ GHR)
                                 & BCEMask);
@@ -295,7 +298,7 @@ bool BiModeBP::lookupBCE(ThreadID tid, Addr branchAddr, void* &bp_history)
 	bool willBeCorrect = BCE[BCEIdx].read() == BCEThreshold;
 
 	/* bp_history update */
-	static_cast<BPHistory*>(bp_history)->isHighConfidence = willBeCorrect;
+	history->isHighConfidence = willBeCorrect;
 
 	return willBeCorrect;
 }
@@ -323,7 +326,6 @@ void BiModeBP::updateBCE(ThreadID tid, Addr branchAddr, bool correct, void *bpHi
 //		BCE[BCEIdx].reset();
 		BCE[BCEIdx].decrement();
 	}
-
 }
 
 bool BiModeBP::isEstimatedHighConfidence(void *bpHistory)
