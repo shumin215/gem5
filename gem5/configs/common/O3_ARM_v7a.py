@@ -102,7 +102,7 @@ class O3_ARM_v7a_BP(BiModeBP):
     RASSize = 16
     instShiftAmt = 2
     BCESize = 8192
-    BCECtrBits = 2
+    BCECtrBits = 4
 
 class O3_ARM_v7a_3(DerivO3CPU):
     LQEntries = 16

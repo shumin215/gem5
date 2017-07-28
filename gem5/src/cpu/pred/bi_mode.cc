@@ -44,7 +44,9 @@ BiModeBP::BiModeBP(const BiModeBPParams *params)
       choicePredictorSize(params->choicePredictorSize),
       choiceCtrBits(params->choiceCtrBits),
       globalPredictorSize(params->globalPredictorSize),
-      globalCtrBits(params->globalCtrBits)
+      globalCtrBits(params->globalCtrBits),
+	  BCESize(params->BCESize),
+	  BCECtrBits(params->BCECtrBits)
 {
     if (!isPowerOf2(choicePredictorSize))
         fatal("Invalid choice predictor size.\n");
@@ -75,6 +77,11 @@ BiModeBP::BiModeBP(const BiModeBPParams *params)
     choiceHistoryMask = choicePredictorSize - 1;
     globalHistoryMask = globalPredictorSize - 1;
 
+	/* BCE Mask*/
+	BCEMask = BCESize - 1;
+	/* BCE Threshold */
+	BCEThreshold = BCE_THRESHOLD;
+
 	/* ULL(1) = 1 */
     choiceThreshold = (ULL(1) << (choiceCtrBits - 1)) - 1;
     takenThreshold = (ULL(1) << (choiceCtrBits - 1)) - 1;
@@ -95,6 +102,7 @@ BiModeBP::uncondBranch(ThreadID tid, Addr pc, void * &bpHistory)
     history->takenPred = true;
     history->notTakenPred = true;
     history->finalPred = true;
+	history->isHighConfidence = true;
     bpHistory = static_cast<void*>(history);
     updateGlobalHistReg(tid, true);
 }
@@ -273,4 +281,59 @@ BiModeBP*
 BiModeBPParams::create()
 {
     return new BiModeBP(this);
+}
+
+bool BiModeBP::lookupBCE(ThreadID tid, Addr branchAddr, void* &bp_history)
+{
+	unsigned GHR = static_cast<BiModeBP::BPHistory*>(bp_history)->globalHistoryReg;
+    unsigned BCEIdx = (((branchAddr >> instShiftAmt)
+                                ^ GHR)
+                                & BCEMask);
+
+    assert(BCEIdx < BCESize);
+
+	bool willBeCorrect = BCE[BCEIdx].read() == BCEThreshold;
+
+	/* bp_history update */
+	static_cast<BPHistory*>(bp_history)->isHighConfidence = willBeCorrect;
+
+	return willBeCorrect;
+}
+
+void BiModeBP::updateBCE(ThreadID tid, Addr branchAddr, bool correct, void *bpHistory)
+{
+    assert(bpHistory);
+
+    BPHistory *history = static_cast<BPHistory*>(bpHistory);
+
+	unsigned GHR = history->globalHistoryReg;
+    unsigned BCEIdx = (((branchAddr >> instShiftAmt)
+                                ^ GHR)
+                                & BCEMask);
+    assert(BCEIdx < BCESize);
+
+	/* If it's not squash, namely Estimation is cirrect */
+	if(correct == true)
+	{
+		BCE[BCEIdx].increment();
+	}
+	/* Estimation is incorrect */
+	else
+	{
+//		BCE[BCEIdx].reset();
+		BCE[BCEIdx].decrement();
+	}
+
+}
+
+bool BiModeBP::isEstimatedHighConfidence(void *bpHistory)
+{
+    assert(bpHistory);
+
+    BPHistory *history = static_cast<BPHistory*>(bpHistory);
+
+	if(history->isHighConfidence == true)
+		return true;
+	else
+		return false;
 }

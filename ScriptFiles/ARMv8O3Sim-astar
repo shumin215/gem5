@@ -87,10 +87,10 @@ for movElimination in ${mov_conf}; do
     echo "######## ${bench} IXU width: ${ixuWidth}, IXU depth: ${ixuDepth}, MOV Elimination: ${movElimination} ########"
 
     # Modify configure file
-    echo "{if (NR == 133) print \"    ixuWidth = ${ixuWidth}\" > \"${config_root}/O3_ARM_v7a.abc\";
-           else if (NR == 134) print \"    ixuDepth = ${ixuDepth}\" > \"${config_root}/O3_ARM_v7a.abc\";
-           else if (NR == 132) print \"    isIXUUsed = ${movElimination}\" > \"${config_root}/O3_ARM_v7a.abc\";
-           else if (NR == 135) print \"    isMovEliUsed = ${movElimination}\" > \"${config_root}/O3_ARM_v7a.abc\";
+    echo "{if (NR == 135) print \"    ixuWidth = ${ixuWidth}\" > \"${config_root}/O3_ARM_v7a.abc\";
+           else if (NR == 136) print \"    ixuDepth = ${ixuDepth}\" > \"${config_root}/O3_ARM_v7a.abc\";
+           else if (NR == 134) print \"    isIXUUsed = ${movElimination}\" > \"${config_root}/O3_ARM_v7a.abc\";
+           else if (NR == 137) print \"    isMovEliUsed = ${movElimination}\" > \"${config_root}/O3_ARM_v7a.abc\";
            else print \$0 > \"${config_root}/O3_ARM_v7a.abc\"}" > awkprog
 
     echo "{print \$0 > \"${config_root}/O3_ARM_v7a.py\"}" > awkprog1

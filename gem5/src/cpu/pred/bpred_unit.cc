@@ -75,6 +75,8 @@ BPredUnit::BPredUnit(const Params *params)
 {
     for (auto& r : RAS)
         r.init(params->RASSize);
+
+	this->isEstimationCorrect = false;
 }
 
 void
@@ -145,10 +147,39 @@ BPredUnit::regStats()
         ;
 
     indirectMispredicted
-        .name(name() + "indirectMispredicted")
+        .name(name() + ".indirectMispredicted")
         .desc("Number of mispredicted indirect branches.")
         ;
 
+    highConfidence
+        .name(name() + ".highConfidence")
+        .desc("Number of high confidence branch")
+        ;
+
+    lowConfidence
+        .name(name() + ".lowConfidence")
+        .desc("Number of low confidence branch")
+        ;
+
+    highConfEstCorrect
+        .name(name() + ".highConfEstCorrect")
+        .desc("Number of high confidence when estimation is correct")
+        ;
+
+    highConfEstIncorrect
+        .name(name() + ".highConfEstIncorrect")
+        .desc("Number of high confidence when estimation is incorrect")
+        ;
+
+    lowConfEstCorrect
+        .name(name() + ".lowConfEstCorrect")
+        .desc("Number of low confidence when estimation is correct")
+        ;
+
+    lowConfEstIncorrect
+        .name(name() + ".lowConfEstIncorrect")
+        .desc("Number of low confidence when estimation is incorrect")
+        ;
 }
 
 ProbePoints::PMUUPtr
@@ -198,19 +229,42 @@ BPredUnit::predict(const StaticInstPtr &inst, const InstSeqNum &seqNum,
         pred_taken = true;
         // Tell the BP there was an unconditional branch.
         uncondBranch(tid, pc.instAddr(), bp_history);
+
+		/* Unconditional branch */
+		isEstimationCorrect = true;
     } else {
         ++condPredicted;
         pred_taken = lookup(tid, pc.instAddr(), bp_history);
 
         DPRINTF(Branch, "[tid:%i]: [sn:%i] Branch predictor"
                 " predicted %i for PC %s\n", tid, seqNum,  pred_taken, pc);
+
+		/* Branch Confidence Estimation */
+		isEstimationCorrect = lookupBCE(tid, pc.instAddr(), bp_history);
+		DPRINTF(Branch, "BCE: result: %i for PC %s [sn:%i]\n", isEstimationCorrect, 
+				pc, seqNum);
     }
+
+	/* Estimation is correct */
+	if(isEstimationCorrect)
+	{
+		DPRINTF(Branch, "BCE: estimation represents correction [sn:%i]\n", seqNum);
+		highConfidence++;
+	}
+	else
+	{
+		DPRINTF(Branch, "BCE: estimation represents wrong [sn:%i]\n", seqNum);
+		lowConfidence++;
+	}
 
     DPRINTF(Branch, "[tid:%i]: [sn:%i] Creating prediction history "
             "for PC %s\n", tid, seqNum, pc);
 
     PredictorHistory predict_record(seqNum, pc.instAddr(),
                                     pred_taken, bp_history, tid);
+
+	/* Record the result of estimation of BCE */
+	predict_record.estimationTaken = isEstimationCorrect;
 
     // Now lookup in the BTB or RAS.
     if (pred_taken) {
@@ -337,7 +391,24 @@ BPredUnit::update(const InstSeqNum &done_sn, ThreadID tid)
 
     iPred.commit(done_sn, tid);
     while (!predHist[tid].empty() &&
-           predHist[tid].back().seqNum <= done_sn) {
+           predHist[tid].back().seqNum <= done_sn) 
+	{
+		/* If high confidence branch */
+		if(isEstimatedHighConfidence(predHist[tid].back().bpHistory) == true)
+		{
+			/* if high confidence branch is correct */
+			highConfEstCorrect++;
+		} 
+		/* If low confidence branch */
+		else
+		{
+			/* If low confidence branch is correct */
+			lowConfEstIncorrect++;
+		}
+
+		/* Update BCE */
+		updateBCE(tid, predHist[tid].back().pc, true, predHist[tid].back().bpHistory);
+
         // Update the branch predictor with the correct results.
         update(tid, predHist[tid].back().pc,
                     predHist[tid].back().predTaken,
@@ -347,6 +418,8 @@ BPredUnit::update(const InstSeqNum &done_sn, ThreadID tid)
     }
 }
 
+/* This predHist is only for update when the branch instructions are
+ * correctly committed */
 void
 BPredUnit::squash(const InstSeqNum &squashed_sn, ThreadID tid)
 {
@@ -369,6 +442,14 @@ BPredUnit::squash(const InstSeqNum &squashed_sn, ThreadID tid)
                      pred_hist.front().seqNum, pred_hist.front().pc);
              RAS[tid].pop();
         }
+
+		/* If high confidence branch */
+		if(isEstimatedHighConfidence(pred_hist.front().bpHistory))
+		{
+			highConfEstIncorrect++;
+		}
+		else
+			lowConfEstCorrect++;
 
         // This call should delete the bpHistory.
         squash(tid, pred_hist.front().bpHistory);
@@ -449,6 +530,19 @@ BPredUnit::squash(const InstSeqNum &squashed_sn,
 
         // Remember the correct direction for the update at commit.
         pred_hist.front().predTaken = actually_taken;
+
+		/* If high confidence branch */
+		if(isEstimatedHighConfidence(pred_hist.front().bpHistory) == true)
+		{
+			highConfEstIncorrect++;
+		}
+		else
+		{
+			lowConfEstCorrect++;
+		}
+
+		/* Update BCE */
+		updateBCE(tid, (*hist_it).pc, false, pred_hist.front().bpHistory);
 
         update(tid, (*hist_it).pc, actually_taken,
                pred_hist.front().bpHistory, true);

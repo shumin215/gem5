@@ -86,7 +86,7 @@ class BiModeBP(BranchPredictor):
     choicePredictorSize = Param.Unsigned(8192, "Size of choice predictor")
     choiceCtrBits = Param.Unsigned(2, "Bits of choice counters")
     BCESize = Param.Unsigned(8192, "Size of branch predictor estimator")
-    BCECtrBits = Param.Unsigned(2, "Bits per counter")
+    BCECtrBits = Param.Unsigned(4, "Bits per counter")
 
 class LTAGE(BranchPredictor):
     type = 'LTAGE'

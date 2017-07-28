@@ -141,6 +141,12 @@ class BPredUnit : public SimObject
      */
     virtual bool lookup(ThreadID tid, Addr instPC, void * &bp_history) = 0;
 
+	virtual bool lookupBCE(ThreadID tid, Addr branchAddr, void* &bp_history) = 0;
+
+	virtual void updateBCE(ThreadID tid, Addr branchAddr, 
+			bool correct, void *bpHistory) = 0;
+	/* For get stats */
+	virtual bool isEstimatedHighConfidence(void *bpHistory) = 0;
      /**
      * If a branch is not taken, because the BTB address is invalid or missing,
      * this function sets the appropriate counter in the global and local
@@ -203,7 +209,7 @@ class BPredUnit : public SimObject
                          ThreadID _tid)
             : seqNum(seq_num), pc(instPC), bpHistory(bp_history), RASTarget(0),
               RASIndex(0), tid(_tid), predTaken(pred_taken), usedRAS(0), pushedRAS(0),
-              wasCall(0), wasReturn(0), wasIndirect(0)
+              wasCall(0), wasReturn(0), wasIndirect(0), estimationTaken(0)
         {}
 
         bool operator==(const PredictorHistory &entry) const {
@@ -248,6 +254,9 @@ class BPredUnit : public SimObject
 
         /** Wether this instruction was an indirect branch */
         bool wasIndirect;
+
+		/* the Estimation of BCE */
+		bool estimationTaken;
     };
 
     typedef std::deque<PredictorHistory> History;
@@ -271,6 +280,9 @@ class BPredUnit : public SimObject
 
     /** Option to disable indirect predictor. */
     const bool useIndirect;
+
+	/* Current estimation result */
+	bool isEstimationCorrect;
 
     /** The indirect target predictor. */
     IndirectPredictor iPred;
@@ -303,6 +315,16 @@ class BPredUnit : public SimObject
     /** Stat for the number of indirect target mispredictions.*/
     Stats::Scalar indirectMispredicted;
 
+	/* Stat for the count of that prediction is correct */
+	Stats::Scalar highConfidence;
+	/* Stat for the count of that prediction is wrong */
+	Stats::Scalar lowConfidence;
+
+	Stats::Scalar highConfEstCorrect;
+	Stats::Scalar highConfEstIncorrect;
+	Stats::Scalar lowConfEstCorrect;
+	Stats::Scalar lowConfEstIncorrect;
+
   protected:
     /** Number of bits to shift instructions by for predictor addresses. */
     const unsigned instShiftAmt;
@@ -333,6 +355,11 @@ class BPredUnit : public SimObject
     ProbePoints::PMUUPtr ppMisses;
 
     /** @} */
+  public:
+	bool getEstimationResult(void)
+	{
+		return this->isEstimationCorrect;
+	}
 };
 
 #endif // __CPU_PRED_BPRED_UNIT_HH__

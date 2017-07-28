@@ -77,6 +77,13 @@ class LocalBP : public BPredUnit
      */
     bool lookup(ThreadID tid, Addr branch_addr, void * &bp_history);
 
+	/* Access BCE */
+	bool lookupBCE(ThreadID tid, Addr branchAddr, void* &bp_history)
+	{ return false; }
+	/* Update BCE */
+	void updateBCE(ThreadID tid, Addr branchAddr, bool correct, void *bp_history) {}
+	/* For get stats */
+	bool isEstimatedHighConfidence(void *bpHistory) {return false;}
     /**
      * Updates the branch predictor to Not Taken if a BTB entry is
      * invalid or not found.

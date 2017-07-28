@@ -39,6 +39,8 @@
 #include "cpu/pred/sat_counter.hh"
 #include "params/BiModeBP.hh"
 
+#define BCE_THRESHOLD 15
+
 /**
  * Implements a bi-mode branch predictor. The bi-mode predictor is a two-level
  * branch predictor that has three seprate history arrays: a taken array, a
@@ -64,10 +66,16 @@ class BiModeBP : public BPredUnit
     void update(ThreadID tid, Addr branch_addr, bool taken, void *bp_history,
                 bool squashed);
     unsigned getGHR(ThreadID tid, void *bp_history) const;
+	/* Access BCE */
+	bool lookupBCE(ThreadID tid, Addr branchAddr, void* &bp_history);
+	/* Update BCE */
+	void updateBCE(ThreadID tid, Addr branchAddr, bool correct, void *bp_history);
+
+	/* For get stats */
+	bool isEstimatedHighConfidence(void *bpHistory);
 
   private:
     void updateGlobalHistReg(ThreadID tid, bool taken);
-
     struct BPHistory {
         unsigned globalHistoryReg;
         // was the taken array's prediction used?
@@ -86,6 +94,9 @@ class BiModeBP : public BPredUnit
         // true: predict taken
         // false: predict not-taken
         bool finalPred;
+
+		/* the Estimation of BCE */
+		bool isHighConfidence;
     };
 
     // choice predictors
@@ -115,6 +126,9 @@ class BiModeBP : public BPredUnit
 
 	unsigned BCESize;
 	unsigned BCECtrBits;
+
+	unsigned BCEMask;
+	unsigned BCEThreshold;
 };
 
 #endif // __CPU_PRED_BI_MODE_PRED_HH__

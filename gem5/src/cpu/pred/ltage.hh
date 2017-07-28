@@ -72,6 +72,15 @@ class LTAGE: public BPredUnit
     void squash(ThreadID tid, void *bp_history) override;
     unsigned getGHR(ThreadID tid, void *bp_history) const override;
 
+	/* Access BCE */
+	bool lookupBCE(ThreadID tid, Addr branchAddr, void* &bp_history)
+	{ return false; }
+	/* Update BCE */
+	void updateBCE(ThreadID tid, Addr branchAddr, bool correct, void *bp_history)
+	{ }
+	/* For get stats */
+	bool isEstimatedHighConfidence(void *bpHistory) {return false;}
+
   private:
     // Prediction Structures
     // Loop Predictor Entry

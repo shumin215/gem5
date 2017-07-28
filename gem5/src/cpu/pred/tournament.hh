@@ -78,6 +78,15 @@ class TournamentBP : public BPredUnit
      */
     bool lookup(ThreadID tid, Addr branch_addr, void * &bp_history);
 
+	/* Access BCE */
+	bool lookupBCE(ThreadID tid, Addr branchAddr, void* &bp_history)
+	{ return false; }
+	/* Update BCE */
+	void updateBCE(ThreadID tid, Addr branchAddr, bool correct, void *bp_history)
+	{}
+	/* For get stats */
+	bool isEstimatedHighConfidence(void *bpHistory) {return false;}
+
     /**
      * Records that there was an unconditional branch, and modifies
      * the bp history to point to an object that has the previous
