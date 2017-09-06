@@ -50,6 +50,7 @@
 #include <list>
 #include <map>
 #include <queue>
+#include <string>
 
 #include "arch/isa_traits.hh"
 #include "arch/tlb.hh"
@@ -85,6 +86,8 @@ DefaultFetch<Impl>::DefaultFetch(O3CPU *_cpu, DerivO3CPUParams *params)
       iewToFetchDelay(params->iewToFetchDelay),
       commitToFetchDelay(params->commitToFetchDelay),
       fetchWidth(params->fetchWidth),
+	  isBundleCommitUsed(params->isBundleCommitUsed),
+	  historyTableEntries(params->historyTableEntries),
       decodeWidth(params->decodeWidth),
       retryPkt(NULL),
       retryTid(InvalidThreadID),
@@ -310,6 +313,8 @@ DefaultFetch<Impl>::setTimeBuffer(TimeBuffer<TimeStruct> *time_buffer)
     fromRename = timeBuffer->getWire(-renameToFetchDelay);
     fromIEW = timeBuffer->getWire(-iewToFetchDelay);
     fromCommit = timeBuffer->getWire(-commitToFetchDelay);
+
+	toIEW = timeBuffer->getWire(0);
 }
 
 template<class Impl>
@@ -372,6 +377,11 @@ DefaultFetch<Impl>::resetStage()
 
     wroteToTimeBuffer = false;
     _status = Inactive;
+
+	/* Initialize bundle status */
+	isAfterBranch = false;
+	global_history_table_idx = -1;
+	global_bundle_status = Convention;
 }
 
 template<class Impl>
@@ -1006,6 +1016,13 @@ DefaultFetch<Impl>::checkSignalsAndUpdate(ThreadID tid)
 
         DPRINTF(Fetch, "[tid:%u]: Squashing instructions due to squash "
                 "from commit.\n",tid);
+
+/********************************************************/
+		// New bundle starts 
+		isAfterBranch = true;
+		global_bundle_status = Convention;
+/********************************************************/
+
         // In any case, squash.
         squash(fromCommit->commitInfo[tid].pc,
                fromCommit->commitInfo[tid].doneSeqNum,
@@ -1036,6 +1053,12 @@ DefaultFetch<Impl>::checkSignalsAndUpdate(ThreadID tid)
     if (fromDecode->decodeInfo[tid].squash) {
         DPRINTF(Fetch, "[tid:%u]: Squashing instructions due to squash "
                 "from decode.\n",tid);
+
+/********************************************************/
+		// New bundle starts 
+		isAfterBranch = true;
+		global_bundle_status = Convention;
+/********************************************************/
 
         // Update the branch predictor.
         if (fromDecode->decodeInfo[tid].branchMispredict) {
@@ -1255,7 +1278,8 @@ DefaultFetch<Impl>::fetch(bool &status_change)
     // Keep issuing while fetchWidth is available and branch is not
     // predicted taken
     while (numInst < fetchWidth && fetchQueue[tid].size() < fetchQueueSize
-           && !predictedBranch && !quiesce) {
+           && !predictedBranch && !quiesce) 
+	{
         // We need to process more memory if we aren't going to get a
         // StaticInst from the rom, the current macroop, or what's already
         // in the decoder.
@@ -1346,7 +1370,7 @@ DefaultFetch<Impl>::fetch(bool &status_change)
             }
 #endif
 
-            nextPC = thisPC;
+            nextPC = thisPC; // PC = PC
 
             // If we're branching after this instruction, quit fetching
             // from the same block.
@@ -1360,7 +1384,7 @@ DefaultFetch<Impl>::fetch(bool &status_change)
             newMacro |= thisPC.instAddr() != nextPC.instAddr();
 
             // Move to the next instruction, unless we have a branch.
-            thisPC = nextPC;
+            thisPC = nextPC; // PC = PC + 4
             inRom = isRomMicroPC(thisPC.microPC());
 
             if (newMacro) {
@@ -1369,6 +1393,75 @@ DefaultFetch<Impl>::fetch(bool &status_change)
                 pcOffset = 0;
                 curMacroop = NULL;
             }
+
+/*******************************************************************/
+			if(isBundleCommitUsed == true)
+			{
+
+			/* Start instruction of a bundle */
+			if(isAfterBranch == true && !isEliminatedMovInst(instruction))
+			{
+				TheISA::PCState cur_pc = instruction->pcState();
+				unsigned idx = cur_pc.instAddr() % historyTableEntries;
+				instruction->history_table_idx = idx;
+
+				
+				DPRINTF(Fetch, "BundleCommit: Instruction is start of a bundle (Bundle idx: %d) [sn:%i]\n",
+						idx, instruction->seqNum);
+				// Set instruction is start of its bundle 
+				instruction->isStartInstInBundle = true;
+				DPRINTF(Fetch, "BundleCommit: Start inst addr: %d\n", cur_pc.instAddr());
+
+				/* If bundle history already exists */
+				if(isBundleHistoryPresent(cur_pc))
+				{
+					DPRINTF(Fetch, "BundleCommit: Bundle History exists [Bundle mode] [sn:%i]\n",
+							instruction->seqNum);
+					printBundleInfo(idx);
+
+					instruction->bundle_status = static_cast<uint8_t>(Bundle);
+				}
+				else
+				{
+					DPRINTF(Fetch, "BundleCommit: Bundle History doesn't exist [Analysis mode] [sn:%i]\n",
+							instruction->seqNum);
+					instruction->bundle_status = static_cast<uint8_t>(Analysis);
+				}
+
+				global_history_table_idx = idx;
+				global_bundle_status = static_cast<BundleStatus>(instruction->bundle_status);
+				isAfterBranch = false;
+			}
+			/* After start instruction of a bundle */
+			else if(isAfterBranch == false)
+			{
+				DPRINTF(Fetch, "BundleCommit: (Bundle idx: %d) [sn:%i]\n",
+						global_history_table_idx, instruction->seqNum);
+
+				if(global_bundle_status == Bundle || global_bundle_status == Analysis)
+					assert(global_history_table_idx != -1);
+
+				instruction->history_table_idx = global_history_table_idx;
+				instruction->bundle_status = static_cast<uint8_t>(global_bundle_status);
+			}
+
+			// If an instruction is branch, next instruction can be start of bundle
+			if(instruction->isControl() == true ||
+					instruction->isUncondCtrl())
+			{
+				global_bundle_status = Convention;
+				global_history_table_idx = -1;
+				isAfterBranch = true;
+				
+				// Set instruction to end instruction in its bundle
+				instruction->isEndInstInBundle = true;
+
+				DPRINTF(Fetch, "BundleCommit: this instruction is end of the bundle [sn:%i]\n",
+						instruction->seqNum);
+			}
+
+			}
+/*******************************************************************/
 
             if (instruction->isQuiesce()) {
                 DPRINTF(Fetch,
@@ -1417,6 +1510,12 @@ DefaultFetch<Impl>::fetch(bool &status_change)
         fetchStatus[tid] != IcacheWaitRetry &&
         fetchStatus[tid] != QuiescePending &&
         !curMacroop;
+}
+
+template<class Impl>
+void DefaultFetch<Impl>::setLWModule(LWModule *_lwModule)
+{
+    lwModule = _lwModule;
 }
 
 template<class Impl>
@@ -1687,6 +1786,147 @@ DefaultFetch<Impl>::profileStall(ThreadID tid) {
         DPRINTF(Fetch, "[tid:%i]: Unexpected fetch stall reason (Status: %i).\n",
              tid, fetchStatus[tid]);
     }
+}
+
+template<class Impl>
+bool DefaultFetch<Impl>::isBundleHistoryPresent(TheISA::PCState cur_pc)
+{
+	unsigned idx = cur_pc.instAddr() % historyTableEntries;
+	bool result = false;
+
+	if(lwModule->historyTable[idx].start_inst_pc == (unsigned)cur_pc.instAddr()
+			&& lwModule->historyTable[idx].size != 0
+			&& lwModule->historyTable[idx].end_inst_pc != 0)
+	{
+//		assert(lwModule->historyTable[idx].end_inst_pc != 0);
+		assert(lwModule->historyTable[idx].size != 0);
+
+		result = true;
+	}
+	else
+		return false;
+	DPRINTF(Fetch, "BundleCommit: start_inst_pc: %d, end_inst_pc: %d, bundle size: %d\n",
+		lwModule->historyTable[idx].start_inst_pc,
+		lwModule->historyTable[idx].end_inst_pc,
+		lwModule->historyTable[idx].size);
+
+	return result;
+}
+
+template <typename Impl>
+std::string DefaultFetch<Impl>::getOpString(std::string strTarget, std::string strTok)
+{
+	int nCutPos;
+	std::string strResult;
+
+	while((nCutPos = strTarget.find_first_of(strTok)) != strTarget.npos)
+	{
+		if(nCutPos > 0)
+		{
+			strResult = strTarget.substr(0, nCutPos);
+			break;
+		}
+		strTarget = strTarget.substr(nCutPos+1);
+	}
+
+	return strResult;
+}
+
+template <typename Impl>
+bool DefaultFetch<Impl>::hasTwoOperands(DynInstPtr &inst)
+{
+	std::string inst_disassembly = inst->staticInst->disassemble(inst->instAddr());
+	int nCutPos;
+	int num_of_operands = 0;
+
+	while((nCutPos = inst_disassembly.find_first_of(" ")) 
+			!= inst_disassembly.npos)
+	{
+		if(nCutPos > 0)
+		{
+			num_of_operands++;
+		}
+		inst_disassembly = inst_disassembly.substr(nCutPos+1);
+	}
+
+	if(inst_disassembly.length() > 0)
+	{
+		num_of_operands++;
+	}
+
+	if(num_of_operands == 3)
+	{
+		return true;
+	}
+	else
+		return false;
+}
+
+template <typename Impl>
+bool DefaultFetch<Impl>::isMovInstruction(DynInstPtr &inst)
+{
+	std::string inst_disassembly = inst->staticInst->disassemble(inst->instAddr());
+	std::string op_string = getOpString(inst_disassembly, " ");
+
+	/* Count instruction relative to mov, such as movcc, movls, moveq.... */
+	if(inst_disassembly.find("mov") != string::npos)
+	{
+	}
+
+	if(op_string.compare("mov") == 0)
+	{
+		return true;
+	}
+	else
+		return false;
+}
+template <typename Impl>
+bool DefaultFetch<Impl>::hasImmediateValueInMov(DynInstPtr &inst)
+{
+	std::string inst_disassembly = inst->staticInst->disassemble(inst->instAddr());
+
+	if(inst_disassembly.find("mov") != std::string::npos &&
+			inst_disassembly.find("#") != std::string::npos)
+	{
+		return true;
+	}
+	else
+		return false;
+}
+
+template <typename Impl>
+bool DefaultFetch<Impl>::hasInstPCReg(DynInstPtr &inst)
+{
+	bool result = false;
+	std::string inst_disassembly = inst->staticInst->disassemble(inst->instAddr());
+	std::string op_string = getOpString(inst_disassembly, " ");
+
+	/* Count instruction relative to mov, such as movcc, movls, moveq.... */
+	if(inst_disassembly.find("pc") != std::string::npos)
+	{
+		return true;
+	}
+
+	return result;
+}
+
+template<typename Impl>
+bool DefaultFetch<Impl>::isEliminatedMovInst(DynInstPtr &inst)
+{
+	return isMovInstruction(inst) && hasTwoOperands(inst) 
+		&& !hasImmediateValueInMov(inst) && !hasInstPCReg(inst);
+}
+
+template<typename Impl>
+void DefaultFetch<Impl>::printBundleInfo(unsigned bundle_idx)
+{
+	LWModule::BundleHistory bundle_history = 
+		lwModule->historyTable[bundle_idx];
+	
+	DPRINTF(Fetch, "Bundle Info: bundle idx: %d, bundle size: %d,"
+			"bundle count: %d, start addr: %d, end addr: %d\n",
+			bundle_idx, bundle_history.size, bundle_history.count,
+			bundle_history.start_inst_pc, bundle_history.end_inst_pc);
 }
 
 #endif//__CPU_O3_FETCH_IMPL_HH__

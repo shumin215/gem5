@@ -91,6 +91,9 @@ class DerivO3CPU(BaseCPU):
     ixuWidth = Param.Unsigned(2, "Width of IXU")
     ixuDepth = Param.Unsigned(3, "Depth of IXU")
     isMovEliUsed = Param.Bool(True, "MOV elimination is applied")
+    isBundleCommitUsed = Param.Bool(True, "Bundle Commit is applied")
+    bundleLimit = Param.Unsigned(16, "Size of Bundle Limit")
+    historyTableEntries = Param.Unsigned(79, "Number of Bundle History Table Entries")
     fuPool = Param.FUPool(DefaultFUPool(), "Functional Unit pool")
 
     iewToCommitDelay = Param.Cycles(1, "Issue/Execute/Writeback to commit "
@@ -132,6 +135,7 @@ class DerivO3CPU(BaseCPU):
     numPhysCCRegs = Param.Unsigned(_defaultNumPhysCCRegs,
                                    "Number of physical cc registers")
     numIQEntries = Param.Unsigned(64, "Number of instruction queue entries")
+    bundleBufferLimit = Param.Unsigned(16, "Maximum Bundle Buffer Entries")
     numROBEntries = Param.Unsigned(192, "Number of reorder buffer entries")
 
     smtNumFetchingThreads = Param.Unsigned(1, "SMT Number of Fetching Threads")

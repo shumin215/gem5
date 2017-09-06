@@ -69,6 +69,7 @@ DefaultRename<Impl>::DefaultRename(O3CPU *_cpu, DerivO3CPUParams *params)
       commitToRenameDelay(params->commitToRenameDelay),
       renameWidth(params->renameWidth),
 	  isMovEliUsed(params->isMovEliUsed),
+	  isBundleCommitUsed(params->isBundleCommitUsed),
       commitWidth(params->commitWidth),
       numThreads(params->numThreads),
       maxPhysicalRegs(params->numPhysIntRegs + params->numPhysFloatRegs
@@ -210,6 +211,18 @@ DefaultRename<Impl>::regStats()
     numOfMovHavingPC
         .name(name() + ".numOfMovHavingPC")
         .desc("Number of MOV instructions that have source reg as PC register (r15)");
+
+    countOfROBFull
+        .name(name() + ".countOfROBFull")
+        .desc("Count of ROB full events");
+
+    countOfNoFreePhyReg
+        .name(name() + ".countOfNoFreePhyReg")
+        .desc("Count of no free physical register file events");
+
+    countOfNoRenamedInst
+        .name(name() + ".countOfNoRenamedInst")
+        .desc("Count of no renamed instruction events");
 }
 
 template <class Impl>
@@ -330,6 +343,12 @@ void
 DefaultRename<Impl>::setScoreboard(Scoreboard *_scoreboard)
 {
     scoreboard = _scoreboard;
+}
+
+template<class Impl>
+void DefaultRename<Impl>::setLWModule(LWModule *_lwModule)
+{
+    lwModule = _lwModule;
 }
 
 template <class Impl>
@@ -544,6 +563,11 @@ DefaultRename<Impl>::renameInsts(ThreadID tid)
     int insts_available = renameStatus[tid] == Unblocking ?
         skidBuffer[tid].size() : insts[tid].size();
 
+	if(insts_available == 0 && renameStatus[tid] == Idle)
+	{
+		countOfNoRenamedInst++;
+	}
+
     // Check the decode queue to see if instructions are available.
     // If there are no available instructions to rename, then do nothing.
     if (insts_available == 0) {
@@ -688,6 +712,8 @@ DefaultRename<Impl>::renameInsts(ThreadID tid)
             insts_to_rename.push_front(inst);
             ++renameFullRegistersEvents;
 
+			countOfNoFreePhyReg++;
+
             break;
         }
 
@@ -796,6 +822,32 @@ DefaultRename<Impl>::renameInsts(ThreadID tid)
 
 			continue;
 		}
+
+/*******************************************************************/
+
+		/* Except for Mov instruction eliminated by MOV elimination technique */
+		if(isBundleCommitUsed == true)
+		{
+
+//		/* If instruction already has bundle history, namely LWIL, 
+//		 * it doesn't have to make analysis of last writer */
+//		if(inst->hasBundleHistory == true)
+//		{
+//			DPRINTF(Rename, "BundleCommit: Instruction has already bundle history "
+//					"[sn:%i]\n", inst->seqNum);
+//		}
+//		/* Write new bundle history */
+//		else
+//		{
+//			DPRINTF(Rename, "BundleCommit: Instruction makes new bundle history "
+//					"[sn:%i]\n", inst->seqNum);
+//			LWModule::BundleHistory new_bundle_history;
+//			lwModule->initializeHistoryTable(new_bundle_history);
+//		}
+
+		}
+
+/*******************************************************************/
 
         // Put instruction in rename queue.
         toIEW->insts[toIEWIndex] = inst;
@@ -1658,6 +1710,7 @@ DefaultRename<Impl>::incrFullStat(const FullSource &source)
     switch (source) {
       case ROB:
         ++renameROBFullEvents;
+		countOfROBFull++;
         break;
       case IQ:
         ++renameIQFullEvents;

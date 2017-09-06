@@ -57,6 +57,7 @@ template <class Impl>
 ROB<Impl>::ROB(O3CPU *_cpu, DerivO3CPUParams *params)
     : cpu(_cpu),
       numEntries(params->numROBEntries),
+	  isBundleCommitUsed(params->isBundleCommitUsed),
       squashWidth(params->squashWidth),
       numInstsInROB(0),
       numThreads(params->numThreads)
@@ -177,6 +178,12 @@ ROB<Impl>::resetEntries()
     }
 }
 
+template<class Impl>
+void ROB<Impl>::setLWModule(LWModule *_lwModule)
+{
+    lwModule = _lwModule;
+}
+
 template <class Impl>
 int
 ROB<Impl>::entryAmount(ThreadID num_threads)
@@ -259,12 +266,28 @@ ROB<Impl>::retireHead(ThreadID tid)
 
     assert(head_inst->readyToCommit());
 
-    DPRINTF(ROB, "[tid:%u]: Retiring head instruction, "
-            "instruction PC %s, [sn:%lli]\n", tid, head_inst->pcState(),
+    DPRINTF(ROB, "[tid:%u]: Retiring head instruction, ROB MaxEntries: %d,"
+            "instruction PC %s, [sn:%lli]\n", tid, getMaxEntries(tid), head_inst->pcState(),
             head_inst->seqNum);
 
     --numInstsInROB;
     --threadEntries[tid];
+
+/*******************************************************************/
+
+	if(isBundleCommitUsed == true)
+	{
+	
+	if(!head_inst->isLastWriter && getCommitMode(head_inst) == Bundle)
+	{
+		decrementMaxEntries(tid);
+		DPRINTF(ROB, "BundleCommit: Decrement ROB MaxEntries: %d, Free Entries: %d [sn:%i]\n",
+				getMaxEntries(tid), head_inst->seqNum, numFreeEntries());
+	}
+
+	}
+
+/*******************************************************************/
 
     head_inst->clearInROB();
     head_inst->setCommitted();
@@ -364,7 +387,6 @@ ROB<Impl>::doSquash(ThreadID tid)
 
         (*squashIt[tid])->setCanCommit();
 
-
         if (squashIt[tid] == instList[tid].begin()) {
             DPRINTF(ROB, "Reached head of instruction list while "
                     "squashing.\n");
@@ -383,13 +405,34 @@ ROB<Impl>::doSquash(ThreadID tid)
             robTailUpdate = true;
 
         squashIt[tid]--;
-    }
 
+/**************************************************************/
+// the succeeding instruction of exception have to set exception flag
+/**************************************************************/
+		if(isBundleCommitUsed == true)
+		{
+
+		if((*squashIt[tid])->seqNum <= squashedSeqNum[tid])
+		{
+			DynInstPtr inst = (*squashIt[tid]);
+			if(!inst->mispredicted() && getCommitMode(inst) == Bundle)
+			{
+				DPRINTF(ROB, "BundleCommit: Instruction is not mispredicted [sn:%i]\n",
+						inst->seqNum);
+				// Need to change commit mode to convention
+				setExceptionFlagInBundle(inst);
+			}
+		}
+
+		}
+/********************************************************/
+
+    }
 
     // Check if ROB is done squashing.
     if ((*squashIt[tid])->seqNum <= squashedSeqNum[tid]) {
-        DPRINTF(ROB, "[tid:%u]: Done squashing instructions.\n",
-                tid);
+        DPRINTF(ROB, "[tid:%u]: Done squashing instructions. [sn:%i]\n",
+                tid, (*squashIt[tid])->seqNum);
 
         squashIt[tid] = instList[tid].end();
 
@@ -561,6 +604,24 @@ ROB<Impl>::findInst(ThreadID tid, InstSeqNum squash_inst)
         }
     }
     return NULL;
+}
+
+template <typename Impl>
+void ROB<Impl>::setExceptionFlagInBundle(DynInstPtr &inst)
+{
+	lwModule->setException(inst->history_table_idx);
+
+	DPRINTF(ROB, "BundleCommit: exception flag in bundle history sets [sn:%i]\n",
+			inst->seqNum);
+}
+
+template <typename Impl>
+typename ROB<Impl>::BundleStatus 
+ROB<Impl>::getCommitMode(DynInstPtr &inst)
+{
+	BundleStatus inst_status = static_cast<BundleStatus>(inst->bundle_status);
+
+	return inst_status;
 }
 
 #endif//__CPU_O3_ROB_IMPL_HH__

@@ -59,6 +59,10 @@
 #include "cpu/o3/comm.hh"
 #include "cpu/o3/cpu_policy.hh"
 #include "cpu/o3/scoreboard.hh"
+
+/* For bundle commitment */
+#include "cpu/o3/last_writer_module.hh"
+
 #include "cpu/o3/thread_state.hh"
 #include "cpu/activity.hh"
 #include "cpu/base.hh"
@@ -560,6 +564,9 @@ class FullO3CPU : public BaseO3CPU
 
     /** Integer Register Scoreboard */
     Scoreboard scoreboard;
+
+	/* Last Writer Module */
+	LWModule lwModule;
 
     std::vector<TheISA::ISA *> isa;
 

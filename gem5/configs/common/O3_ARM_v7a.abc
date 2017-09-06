@@ -135,6 +135,9 @@ class O3_ARM_v7a_3(DerivO3CPU):
     ixuWidth = 2
     ixuDepth = 2
     isMovEliUsed = True
+    isBundleCommitUsed = False
+    bundleLimit = 128
+    historyTableEntries = 64
     fuPool = O3_ARM_v7a_FUP()
     iewToCommitDelay = 1
     renameToROBDelay = 1
@@ -143,10 +146,12 @@ class O3_ARM_v7a_3(DerivO3CPU):
     trapLatency = 13
     backComSize = 5
     forwardComSize = 5
-    numPhysIntRegs = 128
+    numPhysIntRegs = 64
+#    numPhysIntRegs = 128
     numPhysFloatRegs = 192
     numIQEntries = 64
-    numROBEntries = 128
+    numROBEntries = 32
+#    numROBEntries = 128
 
     switched_out = False
     branchPred = O3_ARM_v7a_BP()

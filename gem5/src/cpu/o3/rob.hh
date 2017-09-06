@@ -52,6 +52,8 @@
 #include "base/types.hh"
 #include "config/the_isa.hh"
 
+#include "cpu/o3/last_writer_module.hh"
+
 struct DerivO3CPUParams;
 
 /**
@@ -84,12 +86,22 @@ class ROB
         Threshold
     };
 
+	enum BundleStatus
+	{
+		Convention,
+		Bundle,
+		Analysis
+	};
+
   private:
     /** Per-thread ROB status. */
     Status robStatus[Impl::MaxThreads];
 
     /** ROB resource sharing policy for SMT mode. */
     ROBPolicy robPolicy;
+
+	/* Last Writer Module */
+	LWModule *lwModule;
 
   public:
     /** ROB constructor.
@@ -176,9 +188,31 @@ class ROB
     /** Returns the number of free entries in a specific ROB paritition. */
     unsigned numFreeEntries(ThreadID tid);
 
+	/* Sets pointer to the lwModule */
+	void setLWModule(LWModule *_lwModule);
+
+	/* Set exception flag in bundle history due to misprediction or exception */
+	void setExceptionFlagInBundle(DynInstPtr &inst);
+
     /** Returns the maximum number of entries for a specific thread. */
     unsigned getMaxEntries(ThreadID tid)
     { return maxEntries[tid]; }
+
+	/* Increment maxEntries of ROB */
+	void incrementMaxEntries(ThreadID tid)
+	{
+		this->maxEntries[tid]++;
+
+//		this->numEntries++;
+	}
+
+	/* Decrement maxEntries of ROB */
+	void decrementMaxEntries(ThreadID tid)
+	{
+		this->maxEntries[tid]--;
+
+//		this->numEntries--;
+	}
 
     /** Returns the number of entries being used by a specific thread. */
     unsigned getThreadEntries(ThreadID tid)
@@ -272,6 +306,9 @@ class ROB
     void regStats();
 
   private:
+	/* Get commit mode of instruction  */
+	typename ROB<Impl>::BundleStatus getCommitMode(DynInstPtr &inst);
+
     /** Reset the ROB state */
     void resetState();
 
@@ -283,6 +320,9 @@ class ROB
 
     /** Number of instructions in the ROB. */
     unsigned numEntries;
+
+	/* Flag for bundle commitment technique */
+	bool isBundleCommitUsed;
 
     /** Entries Per Thread */
     unsigned threadEntries[Impl::MaxThreads];

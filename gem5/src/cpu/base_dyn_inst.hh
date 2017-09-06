@@ -173,6 +173,8 @@ class BaseDynInst : public ExecContext, public RefCounted
     /** InstRecord that tracks this instructions. */
     Trace::InstRecord *traceData;
 
+
+
   protected:
     /** The result of the instruction; assumes an instruction can have many
      *  destination registers.
@@ -249,6 +251,34 @@ class BaseDynInst : public ExecContext, public RefCounted
 
 	/* This is for checking if the instruction is counted for committed instruction */
 	bool isCountedForStats;
+
+/*********************** Bundle Commit ****************************/
+
+//	/* This is relative bundle index */
+//	int16_t rel_bundle_idx; 
+
+	/* This is for accessing bundle history in history table */
+	int16_t history_table_idx;
+
+//	/* If instruction has already bundle history in advance */
+//	bool hasBundleHistory;
+
+	/* If this instruction is last writer */
+	bool isLastWriter;
+
+	/* If this instruction is start of its bundle */
+	bool isStartInstInBundle;
+
+	/* If this instruction is end of its bundle */
+	bool isEndInstInBundle;
+
+	/* Bundle Status 
+	 * 0: Convention 
+	 * 1: Bundle 
+	 * 2: Analysis */
+	uint8_t bundle_status;
+
+/*******************************************************************/
 
     /////////////////////// TLB Miss //////////////////////
     /**

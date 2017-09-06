@@ -500,6 +500,9 @@ MemDepUnit<MemDepPred, Impl>::squash(const InstSeqNum &squashed_num,
     ListIt squash_it = instList[tid].end();
     --squash_it;
 
+	DPRINTF(MemDepUnit, "BundleCommit: mem instList size: %d [sn:%lli]\n",
+			instList[tid].size(), (*squash_it)->seqNum);
+
     MemDepHashIt hash_it;
 
     while (!instList[tid].empty() &&

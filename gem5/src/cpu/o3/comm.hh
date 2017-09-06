@@ -225,6 +225,15 @@ struct TimeBufStruct {
 
     commitComm commitInfo[Impl::MaxThreads];
 
+	enum BundleStatus
+	{
+		Convention,
+		Bundle,
+		Analysis
+	};
+
+	BundleStatus bundle_status[Impl::MaxThreads];
+
     bool decodeBlock[Impl::MaxThreads];
     bool decodeUnblock[Impl::MaxThreads];
     bool renameBlock[Impl::MaxThreads];

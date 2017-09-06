@@ -1198,6 +1198,8 @@ DefaultIEW<Impl>::dispatchInsts(ThreadID tid)
                 // @todo: This is somewhat specific to Alpha.
 				DPRINTF(IEW, "Issue: Store instruction is conditional. [sn:%i]",
 						inst->seqNum);
+				DPRINTF(IEW, "[tid:%i]: Marking PC %s, ready to commit [sn:%i] \n",
+						tid, inst->pcState(), inst->seqNum);
                 inst->setCanCommit();
                 instQueue.insertNonSpec(inst);
                 add_to_iq = false;
@@ -1209,6 +1211,8 @@ DefaultIEW<Impl>::dispatchInsts(ThreadID tid)
 
             toRename->iewInfo[tid].dispatchedToSQ++;
         } else if (inst->isMemBarrier() || inst->isWriteBarrier()) {
+			DPRINTF(IEW, "[tid:%i]: Marking PC %s, ready to commit [sn:%i] \n",
+					tid, inst->pcState(), inst->seqNum);
             // Same as non-speculative stores.
             inst->setCanCommit();
             instQueue.insertBarrier(inst);
@@ -1216,6 +1220,8 @@ DefaultIEW<Impl>::dispatchInsts(ThreadID tid)
         } else if (inst->isNop()) {
             DPRINTF(IEW, "[tid:%i]: Issue: Nop instruction encountered, "
                     "skipping.\n", tid);
+			DPRINTF(IEW, "[tid:%i]: Marking PC %s, ready to commit [sn:%i] \n",
+					tid, inst->pcState(), inst->seqNum);
 
             inst->setIssued();
             inst->setExecuted();
@@ -1235,6 +1241,8 @@ DefaultIEW<Impl>::dispatchInsts(ThreadID tid)
             DPRINTF(IEW, "[tid:%i]: Issue: Nonspeculative instruction "
                     "encountered, skipping.\n", tid);
 
+			DPRINTF(IEW, "[tid:%i]: Marking PC %s, ready to commit [sn:%i] \n",
+					tid, inst->pcState(), inst->seqNum);
             // Same as non-speculative stores.
             inst->setCanCommit();
 
@@ -1365,6 +1373,8 @@ DefaultIEW<Impl>::executeInsts()
 			 * and retire the instruction */
 				inst->setExecuted();
 
+				DPRINTF(IEW, "[tid:%i]: Marking PC %s, ready to commit [sn:%i] \n",
+						inst->threadNumber, inst->pcState(), inst->seqNum);
             /* Not sure if I should set this here or just let commit try to
              	commit any squashed instructions.  I like the latter a bit more.*/
 				inst->setCanCommit();
@@ -1516,6 +1526,8 @@ DefaultIEW<Impl>::executeInsts()
             // ahead and retire the instruction.
             inst->setExecuted();
 
+			DPRINTF(IEW, "[tid:%i]: Marking PC %s, ready to commit [sn:%i] \n",
+					inst->threadNumber, inst->pcState(), inst->seqNum);
             // Not sure if I should set this here or just let commit try to
             // commit any squashed instructions.  I like the latter a bit more.
             inst->setCanCommit();

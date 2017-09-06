@@ -183,6 +183,12 @@ FullO3CPU<Impl>::FullO3CPU(DerivO3CPUParams *params)
                  regFile.totalNumPhysRegs(), TheISA::NumMiscRegs,
                  TheISA::ZeroReg, TheISA::ZeroReg),
 
+	  lwModule(name() + ".lwmodule",
+			  params->historyTableEntries,
+//				(2000)),
+				(TheISA::NumIntRegs + TheISA::NumFloatRegs + TheISA::NumCCRegs),
+				params->bundleBufferLimit),
+
       isa(numThreads, NULL),
 
       icachePort(&fetch, this),
@@ -275,6 +281,12 @@ FullO3CPU<Impl>::FullO3CPU(DerivO3CPUParams *params)
 
     rename.setScoreboard(&scoreboard);
     iew.setScoreboard(&scoreboard);
+
+	/* Set Last Writer Module */
+	fetch.setLWModule(&lwModule);
+	rename.setLWModule(&lwModule);
+	commit.setLWModule(&lwModule);
+	rob.setLWModule(&lwModule);
 
     // Setup the rename map for whichever stages need it.
     for (ThreadID tid = 0; tid < numThreads; tid++) {

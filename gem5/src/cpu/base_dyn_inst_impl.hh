@@ -108,6 +108,17 @@ BaseDynInst<Impl>::initVars()
 	/* This is for checking if the instruction is counted for committed instruction */
 	isCountedForStats = false;
 
+//	/* This is for identifying LWIL*/
+//	rel_bundle_idx = -1;
+
+	history_table_idx = -1;
+
+//	hasBundleHistory = false;
+	isLastWriter = false;
+	isStartInstInBundle = false;
+	isEndInstInBundle = false;
+	bundle_status = 0;
+
     lqIdx = -1;
     sqIdx = -1;
 

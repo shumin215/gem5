@@ -53,6 +53,8 @@
 #include "cpu/timebuf.hh"
 #include "sim/probe/probe.hh"
 
+#include "cpu/o3/last_writer_module.hh"
+
 struct DerivO3CPUParams;
 
 /**
@@ -192,6 +194,9 @@ class DefaultRename
 
     /** Sets pointer to the scoreboard. */
     void setScoreboard(Scoreboard *_scoreboard);
+
+	/* Sets pointer to the lwModule */
+	void setLWModule(LWModule *_lwModule);
 
     /** Perform sanity checks after a drain. */
     void drainSanityCheck() const;
@@ -491,6 +496,9 @@ class DefaultRename
 	/* Flag for MOV elimination technique */
 	bool isMovEliUsed;
 
+	/* Flag for bundle commitment technique */
+	bool isBundleCommitUsed;
+
     /** Commit width, in instructions.  Used so rename knows how many
      *  instructions might have freed registers in the previous cycle.
      */
@@ -530,6 +538,9 @@ class DefaultRename
         SQ,
         NONE
     };
+
+	/* Last Writer Module */
+	LWModule *lwModule;
 
     /** Function used to increment the stat that corresponds to the source of
      * the stall.
@@ -594,6 +605,12 @@ class DefaultRename
 	Stats::Scalar numOfImmediateMov;
 	/* Number of MOV instructions that have source reg as PC register (r15) */
 	Stats::Scalar numOfMovHavingPC;
+	/* Count of ROB full events */
+	Stats::Scalar countOfROBFull;
+	/* Count of no free physical register events */
+	Stats::Scalar countOfNoFreePhyReg;
+	// Count of no renamed instruction from rename satge 
+	Stats::Scalar countOfNoRenamedInst;
 };
 
 #endif // __CPU_O3_RENAME_HH__

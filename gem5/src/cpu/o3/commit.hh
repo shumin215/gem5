@@ -52,6 +52,8 @@
 #include "cpu/timebuf.hh"
 #include "sim/probe/probe.hh"
 
+#include "cpu/o3/last_writer_module.hh"
+
 struct DerivO3CPUParams;
 
 template <class>
@@ -141,6 +143,23 @@ class DefaultCommit
         OldestReady
     };
 
+	/* Commit Mode */
+//	enum CommitMode
+//	{
+//		Single,
+//		Bundle
+//	};
+
+	enum BundleStatus
+	{
+		Convention,
+		Bundle,
+		Analysis
+	};
+
+	/* Bundle Status */
+	BundleStatus global_bundle_status;
+
   private:
     /** Overall commit status. */
     CommitStatus _status;
@@ -150,6 +169,11 @@ class DefaultCommit
     ThreadStatus commitStatus[Impl::MaxThreads];
     /** Commit policy used in SMT mode. */
     CommitPolicy commitPolicy;
+	/* Commit Mode according to exception occurence */
+//	CommitMode commitMode;
+
+	/* Last Writer Module */
+	LWModule *lwModule;
 
     /** Probe Points. */
     ProbePointArg<DynInstPtr> *ppCommit;
@@ -186,6 +210,9 @@ class DefaultCommit
 
     /** Sets the pointer to the IEW stage. */
     void setIEWStage(IEW *iew_stage);
+
+	/* Sets pointer to the lwModule */
+	void setLWModule(LWModule *_lwModule);
 
     /** The pointer to the IEW stage. Used solely to ensure that
      * various events (traps, interrupts, syscalls) do not occur until
@@ -325,6 +352,30 @@ class DefaultCommit
     /** Returns the thread ID to use based on an oldest instruction policy. */
     ThreadID oldestReady();
 
+	/* If an instruction is last writer */
+	bool isLastWriter(DynInstPtr &inst, unsigned &global_rel_idx);
+
+	void incrementInstCountInBundle(DynInstPtr &inst);
+
+	// If all the instructions in a bundle are ready to commit
+	void setBundleEnableFlag(DynInstPtr &inst);
+
+	// Reset exception flag of bundle structure 
+	void resetBundleException(DynInstPtr &inst);
+
+	// Reset bundle_commit flag 
+	void resetBundleCommitFlag(DynInstPtr &inst);
+
+	/* Get commit mode of instruction  */
+	typename DefaultCommit<Impl>::BundleStatus getCommitMode(DynInstPtr &inst);
+
+	bool isSetExceptionFlag(DynInstPtr &inst);
+
+	bool isPossibleBundleCommit(DynInstPtr &inst);
+
+	/* Update LWIL if instruction's state is analysis mode */
+	void analysisInst(DynInstPtr &inst);
+
   public:
     /** Reads the PC of a specific thread. */
     TheISA::PCState pcState(ThreadID tid) { return pc[tid]; }
@@ -358,6 +409,9 @@ class DefaultCommit
     void updateComInstStats(DynInstPtr &inst);
 
   private:
+	// Represent relative index within bundle 
+	unsigned global_rel_idx;
+
     /** Time buffer interface. */
     TimeBuffer<TimeStruct> *timeBuffer;
 
@@ -443,6 +497,9 @@ class DefaultCommit
 
     /** Number of Reorder Buffers */
     unsigned numRobs;
+
+	/* Flag for bundle commitment technique */
+	bool isBundleCommitUsed;
 
     /** Number of Active Threads */
     const ThreadID numThreads;
@@ -543,6 +600,13 @@ class DefaultCommit
 
     /** Number of cycles where the commit bandwidth limit is reached. */
     Stats::Scalar commitEligibleSamples;
+
+	// The number of last writer instructions 
+	Stats::Scalar numOfLastWriter;
+	// The number of non-last writer instructions
+	Stats::Scalar numOfNonLastWrtier;
+	// The number of bundle committed
+	Stats::Scalar numOfCommittedBundle;
 };
 
 #endif // __CPU_O3_COMMIT_HH__

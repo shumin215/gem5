@@ -57,6 +57,8 @@
 #include "sim/eventq.hh"
 #include "sim/probe/probe.hh"
 
+#include "cpu/o3/last_writer_module.hh"
+
 struct DerivO3CPUParams;
 
 /**
@@ -182,6 +184,14 @@ class DefaultFetch
         LSQ
     };
 
+	/* Bundle Status */
+	enum BundleStatus
+	{
+		Convention,
+		Bundle,
+		Analysis
+	};
+
   private:
     /** Fetch status. */
     FetchStatus _status;
@@ -199,6 +209,9 @@ class DefaultFetch
     ProbePointArg<DynInstPtr> *ppFetch;
     /** To probe when a fetch request is successfully sent. */
     ProbePointArg<RequestPtr> *ppFetchRequestSent;
+
+//	/* Bundle Status */
+//	BundleStatus bundle_status;
 
   public:
     /** DefaultFetch constructor. */
@@ -350,6 +363,9 @@ class DefaultFetch
      */
     void fetch(bool &status_change);
 
+	/* Sets pointer to the lwModule */
+	void setLWModule(LWModule *_lwModule);
+
     /** Align a PC to the start of a fetch buffer block. */
     Addr fetchBufferAlignPC(Addr addr)
     {
@@ -386,6 +402,27 @@ class DefaultFetch
     /** Profile the reasons of fetch stall. */
     void profileStall(ThreadID tid);
 
+	std::string getOpString(std::string strTarget, std::string strTok);
+	bool hasTwoOperands(DynInstPtr &inst);
+	bool isMovInstruction(DynInstPtr &inst);
+	bool hasImmediateValueInMov(DynInstPtr &inst);
+	bool hasInstPCReg(DynInstPtr &inst);
+	bool isEliminatedMovInst(DynInstPtr &inst);
+	void printBundleInfo(unsigned bundle_idx);
+
+/*******************************************************************/
+
+	/* Last Writer Module */
+	LWModule *lwModule;
+
+	/* If an instruction is after branch instruction */
+	bool isAfterBranch;
+
+	int16_t global_history_table_idx;
+
+	BundleStatus global_bundle_status;
+
+/*******************************************************************/
   private:
     /** Pointer to the O3CPU. */
     O3CPU *cpu;
@@ -404,6 +441,9 @@ class DefaultFetch
 
     /** Wire to get commit's information from backwards time buffer. */
     typename TimeBuffer<TimeStruct>::wire fromCommit;
+
+    /** Wire to write information heading to previous stages. */
+    typename TimeBuffer<TimeStruct>::wire toIEW;
 
     //Might be annoying how this name is different than the queue.
     /** Wire used to write any information heading to decode. */
@@ -455,6 +495,12 @@ class DefaultFetch
 
     /** The width of fetch in instructions. */
     unsigned fetchWidth;
+
+	/* Flag to enable bundle commimt */
+	bool isBundleCommitUsed;
+
+	/* Number of history table entries */
+	unsigned historyTableEntries;
 
     /** The width of decode in instructions. */
     unsigned decodeWidth;
@@ -519,6 +565,10 @@ class DefaultFetch
 
     /** Set to true if a pipelined I-cache request should be issued. */
     bool issuePipelinedIfetch[Impl::MaxThreads];
+
+	/* Check if bundle history corresponding instruction PC is present in 
+	 * history table */
+	bool isBundleHistoryPresent(TheISA::PCState cur_pc);
 
     /** Event used to delay fault generation of translation faults */
     FinishTranslationEvent finishTranslationEvent;
