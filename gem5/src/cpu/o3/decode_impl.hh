@@ -66,6 +66,7 @@ DefaultDecode<Impl>::DefaultDecode(O3CPU *_cpu, DerivO3CPUParams *params)
       commitToDecodeDelay(params->commitToDecodeDelay),
       fetchToDecodeDelay(params->fetchToDecodeDelay),
       decodeWidth(params->decodeWidth),
+	  isBundleCommitUsed(params->isBundleCommitUsed),
       numThreads(params->numThreads)
 {
     if (decodeWidth > Impl::MaxWidth)
@@ -75,6 +76,12 @@ DefaultDecode<Impl>::DefaultDecode(O3CPU *_cpu, DerivO3CPUParams *params)
 
     // @todo: Make into a parameter
     skidBufferMax = (fetchToDecodeDelay + 1) *  params->fetchWidth;
+}
+
+template<class Impl>
+void DefaultDecode<Impl>::setLWModule(LWModule *_lwModule)
+{
+    lwModule = _lwModule;
 }
 
 template<class Impl>
@@ -292,6 +299,11 @@ DefaultDecode<Impl>::squash(DynInstPtr &inst, ThreadID tid)
 {
     DPRINTF(Decode, "[tid:%i]: [sn:%i] Squashing due to incorrect branch "
             "prediction detected at decode.\n", tid, inst->seqNum);
+
+	if(isBundleCommitUsed == true && inst->bundle_status == 1)
+	{
+		popBundleFromBufferDueToSquash(inst);
+	}
 
     // Send back mispredict information.
     toFetch->decodeInfo[tid].branchMispredict = true;
@@ -754,6 +766,60 @@ DefaultDecode<Impl>::decodeInsts(ThreadID tid)
     if (toRenameIndex) {
         wroteToTimeBuffer = true;
     }
+}
+
+template <typename Impl>
+unsigned DefaultDecode<Impl>::getBundleBufferIdx(DynInstPtr &inst)
+{
+	int start_inst_addr = inst->start_inst_pc;;
+//	start_inst_addr = lwModule->historyTable[_history_table_idx].start_inst_pc;
+	int bundle_buffer_size = lwModule->bundleBuffer.size();
+	int assert_count = 0;
+	int result = 0;
+
+	assert(start_inst_addr != 0);
+
+	// If there is no bundle in bundleBuffer
+	assert(bundle_buffer_size != 0);
+	
+	for(int idx=0; idx<bundle_buffer_size; idx++)
+	{
+		int bundle_start_addr = lwModule->bundleBuffer[idx].start_inst_pc;
+
+//		DPRINTF(Decode, "********** Get BundleBuffer idx: %d, size: %d, start_addr: %d "
+//				",bundle_start_addr: %d *********\n",
+//			idx, bundle_buffer_size, start_inst_addr, bundle_start_addr);
+
+		if(start_inst_addr == bundle_start_addr)
+		{
+//			DPRINTF(Commit, "********** Get BundleBuffer idx: %d, size: %d, start_addr: %d *********\n",
+//				idx, bundle_buffer_size, start_inst_addr);
+			result = idx;
+			assert_count++;
+			break;
+		}
+	}
+
+	assert(assert_count != 0);
+	return result;
+}
+
+template <typename Impl>
+void DefaultDecode<Impl>::popBundleFromBufferDueToSquash(DynInstPtr &inst)
+{
+	unsigned bundle_buffer_idx = getBundleBufferIdx(inst);
+	int bundle_buffer_size = lwModule->bundleBuffer.size();
+
+	for(int i=0; i<(bundle_buffer_size-bundle_buffer_idx-1); i++)
+	{
+		LWModule::BundleHistory bundle_history = 
+			lwModule->bundleBuffer.back();
+		DPRINTF(Decode, "Squashing: bundlebuffer idx: %d, size: %d\n",
+				bundle_buffer_size-1-i, bundle_history.size);
+
+		DPRINTF(Decode, "BundleCommit: Popping bundle from bundleBuffer\n");
+		lwModule->bundleBuffer.pop_back();
+	}
 }
 
 #endif//__CPU_O3_DECODE_IMPL_HH__

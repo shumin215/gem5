@@ -493,6 +493,13 @@ DefaultRename<Impl>::tick()
         instsInProgress[tid] -= fromIEW->iewInfo[tid].dispatched;
         loadsInProgress[tid] -= fromIEW->iewInfo[tid].dispatchedToLQ;
         storesInProgress[tid] -= fromIEW->iewInfo[tid].dispatchedToSQ;
+
+		DPRINTF(Rename, "Debug, Decrement Progress Number\n");
+		calcFreeSQEntries(tid);
+//        DPRINTF(Rename, "calcFreeSQEntries: free sqEntries: %d, storesInProgress: %d, "
+//                "stores dispatchedToSQ: %d\n", freeEntries[tid].sqEntries,
+//                storesInProgress[tid], fromIEW->iewInfo[tid].dispatchedToSQ);
+
         assert(loadsInProgress[tid] >= 0);
         assert(storesInProgress[tid] >= 0);
         assert(instsInProgress[tid] >=0);
@@ -798,6 +805,7 @@ DefaultRename<Impl>::renameInsts(ThreadID tid)
         }
         if (inst->isStore()) {
                 storesInProgress[tid]++;
+			DPRINTF(Rename, "storesInProgress: %d\n", storesInProgress[tid]);
         }
 
 		bool isMovInst = isMovInstruction(inst) && hasTwoOperands(inst)

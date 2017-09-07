@@ -412,17 +412,17 @@ ROB<Impl>::doSquash(ThreadID tid)
 		if(isBundleCommitUsed == true)
 		{
 
-		if((*squashIt[tid])->seqNum <= squashedSeqNum[tid])
-		{
-			DynInstPtr inst = (*squashIt[tid]);
-			if(!inst->mispredicted() && getCommitMode(inst) == Bundle)
-			{
-				DPRINTF(ROB, "BundleCommit: Instruction is not mispredicted [sn:%i]\n",
-						inst->seqNum);
-				// Need to change commit mode to convention
-				setExceptionFlagInBundle(inst);
-			}
-		}
+//		if((*squashIt[tid])->seqNum <= squashedSeqNum[tid])
+//		{
+//			DynInstPtr &inst = (*squashIt[tid]);
+//			if(!inst->mispredicted() && getCommitMode(inst) == Bundle)
+//			{
+//				DPRINTF(ROB, "BundleCommit: Instruction is not mispredicted [sn:%i]\n",
+//						inst->seqNum);
+//				// Need to change commit mode to convention
+//				setExceptionFlagInBundle(inst);
+//			}
+//		}
 
 		}
 /********************************************************/
@@ -609,7 +609,11 @@ ROB<Impl>::findInst(ThreadID tid, InstSeqNum squash_inst)
 template <typename Impl>
 void ROB<Impl>::setExceptionFlagInBundle(DynInstPtr &inst)
 {
-	lwModule->setException(inst->history_table_idx);
+	unsigned bundle_buffer_idx = getBundleBufferIdx(inst);
+	lwModule->setException(bundle_buffer_idx);
+
+	// set instruction convention mode 
+	inst->bundle_status = Convention;
 
 	DPRINTF(ROB, "BundleCommit: exception flag in bundle history sets [sn:%i]\n",
 			inst->seqNum);
@@ -622,6 +626,38 @@ ROB<Impl>::getCommitMode(DynInstPtr &inst)
 	BundleStatus inst_status = static_cast<BundleStatus>(inst->bundle_status);
 
 	return inst_status;
+}
+
+template <typename Impl>
+unsigned ROB<Impl>::getBundleBufferIdx(DynInstPtr &inst)
+{
+	int start_inst_addr = inst->start_inst_pc;;
+//	start_inst_addr = lwModule->historyTable[_history_table_idx].start_inst_pc;
+	int bundle_buffer_size = lwModule->bundleBuffer.size();
+	int assert_count = 0;
+	int result = 0;
+
+	assert(start_inst_addr != 0);
+
+	// If there is no bundle in bundleBuffer
+	assert(bundle_buffer_size != 0);
+	
+	for(int idx=0; idx<bundle_buffer_size; idx++)
+	{
+		int bundle_start_addr = lwModule->bundleBuffer[idx].start_inst_pc;
+
+		if(start_inst_addr == bundle_start_addr)
+		{
+			DPRINTF(ROB, "********** Get BundleBuffer idx: %d, size: %d, start_addr: %d *********\n",
+				idx, bundle_buffer_size, start_inst_addr);
+			result = idx;
+			assert_count++;
+			break;
+		}
+	}
+
+	assert(assert_count != 0);
+	return result;
 }
 
 #endif//__CPU_O3_ROB_IMPL_HH__

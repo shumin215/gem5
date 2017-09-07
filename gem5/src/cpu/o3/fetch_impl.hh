@@ -87,6 +87,7 @@ DefaultFetch<Impl>::DefaultFetch(O3CPU *_cpu, DerivO3CPUParams *params)
       commitToFetchDelay(params->commitToFetchDelay),
       fetchWidth(params->fetchWidth),
 	  isBundleCommitUsed(params->isBundleCommitUsed),
+	  bundleLimit(params->bundleLimit),
 	  historyTableEntries(params->historyTableEntries),
       decodeWidth(params->decodeWidth),
       retryPkt(NULL),
@@ -382,6 +383,8 @@ DefaultFetch<Impl>::resetStage()
 	isAfterBranch = false;
 	global_history_table_idx = -1;
 	global_bundle_status = Convention;
+	global_bundle_inst_num = 0;
+	global_start_inst_addr = 0;
 }
 
 template<class Impl>
@@ -1021,6 +1024,8 @@ DefaultFetch<Impl>::checkSignalsAndUpdate(ThreadID tid)
 		// New bundle starts 
 		isAfterBranch = true;
 		global_bundle_status = Convention;
+		global_bundle_inst_num = 0;
+		global_start_inst_addr = 0;
 /********************************************************/
 
         // In any case, squash.
@@ -1058,6 +1063,8 @@ DefaultFetch<Impl>::checkSignalsAndUpdate(ThreadID tid)
 		// New bundle starts 
 		isAfterBranch = true;
 		global_bundle_status = Convention;
+		global_bundle_inst_num = 0;
+		global_start_inst_addr = 0;
 /********************************************************/
 
         // Update the branch predictor.
@@ -1394,7 +1401,10 @@ DefaultFetch<Impl>::fetch(bool &status_change)
                 curMacroop = NULL;
             }
 
-/*******************************************************************/
+
+/******************************************************************
+ * 	Bundle Commit
+ * **************************************************************/
 			if(isBundleCommitUsed == true)
 			{
 
@@ -1410,6 +1420,8 @@ DefaultFetch<Impl>::fetch(bool &status_change)
 						idx, instruction->seqNum);
 				// Set instruction is start of its bundle 
 				instruction->isStartInstInBundle = true;
+				instruction->start_inst_pc = cur_pc.instAddr();
+
 				DPRINTF(Fetch, "BundleCommit: Start inst addr: %d\n", cur_pc.instAddr());
 
 				/* If bundle history already exists */
@@ -1420,37 +1432,58 @@ DefaultFetch<Impl>::fetch(bool &status_change)
 					printBundleInfo(idx);
 
 					instruction->bundle_status = static_cast<uint8_t>(Bundle);
+					// Make bundle history instance and push it to bundleBuffer
+					pushBundleInfoToBuffer(instruction);
+
+					DPRINTF(Fetch, "BundleCommit: Push bundle info to bundleBuffer [sn:%i]\n",
+							instruction->seqNum);
 				}
 				else
 				{
 					DPRINTF(Fetch, "BundleCommit: Bundle History doesn't exist [Analysis mode] [sn:%i]\n",
 							instruction->seqNum);
 					instruction->bundle_status = static_cast<uint8_t>(Analysis);
+
+					DPRINTF(Fetch, "BundleCommit: Reset valid bit [sn:%i]\n",
+							instruction->seqNum);
+					lwModule->resetValid(instruction->history_table_idx);
 				}
 
+
+				global_start_inst_addr = cur_pc.instAddr();
 				global_history_table_idx = idx;
 				global_bundle_status = static_cast<BundleStatus>(instruction->bundle_status);
+				// This is for checking bundle instruction limit
+				global_bundle_inst_num++;
+
 				isAfterBranch = false;
 			}
 			/* After start instruction of a bundle */
 			else if(isAfterBranch == false)
 			{
-				DPRINTF(Fetch, "BundleCommit: (Bundle idx: %d) [sn:%i]\n",
-						global_history_table_idx, instruction->seqNum);
-
 				if(global_bundle_status == Bundle || global_bundle_status == Analysis)
 					assert(global_history_table_idx != -1);
 
+				instruction->start_inst_pc = global_start_inst_addr;
 				instruction->history_table_idx = global_history_table_idx;
 				instruction->bundle_status = static_cast<uint8_t>(global_bundle_status);
+				// This is for checking bundle instruction limit
+				global_bundle_inst_num++;
 			}
 
+			DPRINTF(Fetch, "BundleCommit: (Bundle idx: %d, Inst count: %d) [sn:%i]\n",
+					global_history_table_idx, global_bundle_inst_num, instruction->seqNum);
+
 			// If an instruction is branch, next instruction can be start of bundle
-			if(instruction->isControl() == true ||
-					instruction->isUncondCtrl())
+			if(instruction->isControl() == true 
+					|| instruction->isUncondCtrl()
+					|| bundleLimit <= global_bundle_inst_num)
 			{
 				global_bundle_status = Convention;
 				global_history_table_idx = -1;
+				global_bundle_inst_num = 0;
+				global_start_inst_addr = 0;
+
 				isAfterBranch = true;
 				
 				// Set instruction to end instruction in its bundle
@@ -1793,6 +1826,10 @@ bool DefaultFetch<Impl>::isBundleHistoryPresent(TheISA::PCState cur_pc)
 {
 	unsigned idx = cur_pc.instAddr() % historyTableEntries;
 	bool result = false;
+	LWModule::BundleHistory &bundle_history = lwModule->historyTable[idx];
+
+	if(bundle_history.valid == true)
+	{
 
 	if(lwModule->historyTable[idx].start_inst_pc == (unsigned)cur_pc.instAddr()
 			&& lwModule->historyTable[idx].size != 0
@@ -1805,6 +1842,8 @@ bool DefaultFetch<Impl>::isBundleHistoryPresent(TheISA::PCState cur_pc)
 	}
 	else
 		return false;
+	}
+
 	DPRINTF(Fetch, "BundleCommit: start_inst_pc: %d, end_inst_pc: %d, bundle size: %d\n",
 		lwModule->historyTable[idx].start_inst_pc,
 		lwModule->historyTable[idx].end_inst_pc,
@@ -1927,6 +1966,33 @@ void DefaultFetch<Impl>::printBundleInfo(unsigned bundle_idx)
 			"bundle count: %d, start addr: %d, end addr: %d\n",
 			bundle_idx, bundle_history.size, bundle_history.count,
 			bundle_history.start_inst_pc, bundle_history.end_inst_pc);
+}
+
+template <typename Impl>
+void DefaultFetch<Impl>::pushBundleInfoToBuffer(DynInstPtr &inst)
+{
+	assert(inst->history_table_idx != -1);
+	assert(inst->isStartInstInBundle);
+
+	LWModule::BundleHistory bundle_history = 
+		lwModule->historyTable[inst->history_table_idx];
+
+	LWModule::BundleHistory new_bundle_history;
+
+	lwModule->initializeHistoryTable(new_bundle_history);
+
+	// if this is bundle mode
+	if(inst->bundle_status == 1)
+	{
+		new_bundle_history.size = bundle_history.size;
+		new_bundle_history.start_inst_pc = bundle_history.start_inst_pc;
+		new_bundle_history.end_inst_pc = bundle_history.end_inst_pc;
+	}
+//	DPRINTF(Fetch, "BundleCommit: start inst addr: %d [sn:%i]\n",
+//			new_bundle_history.start_inst_pc, inst->seqNum);
+
+	// Push 
+	lwModule->bundleBuffer.push_back(new_bundle_history);
 }
 
 #endif//__CPU_O3_FETCH_IMPL_HH__

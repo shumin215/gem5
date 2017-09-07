@@ -376,6 +376,16 @@ class DefaultCommit
 	/* Update LWIL if instruction's state is analysis mode */
 	void analysisInst(DynInstPtr &inst);
 
+	unsigned getBundleBufferIdx(DynInstPtr &inst);
+
+	void writeBundleInfoToHistoryTable(unsigned bundle_buffer_idx, unsigned history_table_idx);
+
+	void popBundleFromBundleBuffer(DynInstPtr &inst);
+
+	void popBundleFromBufferDueToSquash(DynInstPtr &inst);
+
+	void popAllBufferFromBundleBuffer(void);
+
   public:
     /** Reads the PC of a specific thread. */
     TheISA::PCState pcState(ThreadID tid) { return pc[tid]; }

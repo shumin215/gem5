@@ -523,6 +523,7 @@ DefaultIEW<Impl>::squash(ThreadID tid)
 
         skidBuffer[tid].pop();
     }
+	DPRINTF(IEW, "Debug: dispatchedToSQ:%d\n",toRename->iewInfo[tid].dispatchedToSQ);
 
     emptyRenameInsts(tid);
 }
@@ -914,6 +915,7 @@ DefaultIEW<Impl>::emptyRenameInsts(ThreadID tid)
 
         insts[tid].pop();
     }
+	DPRINTF(IEW, "Debug: dispatchedToSQ:%d\n",toRename->iewInfo[tid].dispatchedToSQ);
 }
 
 template <class Impl>
@@ -1056,6 +1058,8 @@ DefaultIEW<Impl>::dispatchInsts(ThreadID tid)
             }
 
             toRename->iewInfo[tid].dispatched++;
+			DPRINTF(IEW, "Debug, dispatchedToSQ:%d, when squashed\n [sn:%i]\n",
+					toRename->iewInfo[tid].dispatchedToSQ);
 
             continue;
         }
@@ -1210,6 +1214,9 @@ DefaultIEW<Impl>::dispatchInsts(ThreadID tid)
             }
 
             toRename->iewInfo[tid].dispatchedToSQ++;
+			DPRINTF(IEW, "Debug, dispatchedToSQ:%d store instruction is ready\n [sn:%i]\n",
+					toRename->iewInfo[tid].dispatchedToSQ);
+
         } else if (inst->isMemBarrier() || inst->isWriteBarrier()) {
 			DPRINTF(IEW, "[tid:%i]: Marking PC %s, ready to commit [sn:%i] \n",
 					tid, inst->pcState(), inst->seqNum);
@@ -1271,6 +1278,8 @@ DefaultIEW<Impl>::dispatchInsts(ThreadID tid)
 #endif
         ppDispatch->notify(inst);
     }
+	DPRINTF(IEW, "Debug: dispatchedToSQ:%d After dispatching\n",
+			toRename->iewInfo[tid].dispatchedToSQ);
 
     if (!insts_to_dispatch.empty()) {
         DPRINTF(IEW,"[tid:%i]: Issue: Bandwidth Full. Blocking.\n", tid);

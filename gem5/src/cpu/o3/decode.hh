@@ -48,6 +48,8 @@
 #include "base/statistics.hh"
 #include "cpu/timebuf.hh"
 
+#include "cpu/o3/last_writer_module.hh"
+
 struct DerivO3CPUParams;
 
 /**
@@ -143,6 +145,9 @@ class DefaultDecode
      */
     void decode(bool &status_change, ThreadID tid);
 
+	/* Sets pointer to the lwModule */
+	void setLWModule(LWModule *_lwModule);
+
     /** Processes instructions from fetch and passes them on to rename.
      * Decoding of instructions actually happens when they are created in
      * fetch, so this function mostly checks if PC-relative branches are
@@ -151,6 +156,14 @@ class DefaultDecode
     void decodeInsts(ThreadID tid);
 
   private:
+	/* Last Writer Module */
+	LWModule *lwModule;
+
+	// Pop bundle from bundleBuffer due to squash
+	void popBundleFromBufferDueToSquash(DynInstPtr &inst);
+
+	unsigned getBundleBufferIdx(DynInstPtr &inst);
+
     /** Inserts a thread's instructions into the skid buffer, to be decoded
      * once decode unblocks.
      */
@@ -268,6 +281,8 @@ class DefaultDecode
 
     /** The width of decode, in instructions. */
     unsigned decodeWidth;
+
+	bool isBundleCommitUsed;
 
     /** Index of instructions being sent to rename. */
     unsigned toRenameIndex;

@@ -118,6 +118,7 @@ BaseDynInst<Impl>::initVars()
 	isStartInstInBundle = false;
 	isEndInstInBundle = false;
 	bundle_status = 0;
+	start_inst_pc = 0;
 
     lqIdx = -1;
     sqIdx = -1;

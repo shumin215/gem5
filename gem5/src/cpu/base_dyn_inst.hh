@@ -278,6 +278,9 @@ class BaseDynInst : public ExecContext, public RefCounted
 	 * 2: Analysis */
 	uint8_t bundle_status;
 
+	// This is start instruction pc in bundle
+	Addr start_inst_pc;
+
 /*******************************************************************/
 
     /////////////////////// TLB Miss //////////////////////

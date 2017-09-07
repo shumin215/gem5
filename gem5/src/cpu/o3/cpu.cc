@@ -284,6 +284,7 @@ FullO3CPU<Impl>::FullO3CPU(DerivO3CPUParams *params)
 
 	/* Set Last Writer Module */
 	fetch.setLWModule(&lwModule);
+	decode.setLWModule(&lwModule);
 	rename.setLWModule(&lwModule);
 	commit.setLWModule(&lwModule);
 	rob.setLWModule(&lwModule);

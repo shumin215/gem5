@@ -12,7 +12,7 @@ LWModule::LWModule(const std::string &_my_name,
 				unsigned _num_of_entries,
 				unsigned _num_of_arch_regs,
 				unsigned _bundle_buffer_limit)
-	: name(_my_name), num_of_entries(_num_of_entries), num_of_arch_regs(_num_of_arch_regs),
+	: name(_my_name), num_of_entries(_num_of_entries), num_of_arch_regs(_num_of_arch_regs), 
 	bundle_buffer_limit(_bundle_buffer_limit)
 {
 //	DPRINTF(LWModule, "LWModule: LWModule is launched\n");
@@ -24,7 +24,7 @@ LWModule::LWModule(const std::string &_my_name,
 		initializeHistoryTable(historyTable[i]);
 	}
 
-	bundleBuffer.resize(bundle_buffer_limit);
+//	bundleBuffer.resize(bundle_buffer_limit);
 }
 
 void LWModule::makeNewLWIL(std::vector<LWIL> &lwil)
@@ -45,6 +45,7 @@ void LWModule::initializeHistoryTable(BundleHistory &history_table)
 	history_table.exception = false;
 	history_table.count = 0;
 	history_table.bundle_commit = false;
+	history_table.valid = false;
 
 	makeNewLWIL(history_table.lw_index_list);
 
@@ -66,6 +67,7 @@ void LWModule::clearBundleHistory(unsigned _index)
 	historyTable[_index].exception = false;
 	historyTable[_index].count = 0;
 	historyTable[_index].bundle_commit = false;
+	historyTable[_index].valid = false;
 
 	for(int i=0; i<num_of_arch_regs; i++)
 	{
@@ -96,19 +98,19 @@ void LWModule::incrementSize(unsigned _history_table_index)
 	historyTable[_history_table_index].size++;
 }
 
-void LWModule::setException(unsigned _history_table_index)
+void LWModule::setException(unsigned _bundle_buffer_index)
 {
-	historyTable[_history_table_index].exception = true;
+	bundleBuffer[_bundle_buffer_index].exception = true;
 }
 
-void LWModule::resetException(unsigned _history_table_index)
+void LWModule::resetException(unsigned _bundle_buffer_index)
 {
-	historyTable[_history_table_index].exception = false;
+	bundleBuffer[_bundle_buffer_index].exception = false;
 }
 
-void LWModule::incrementCount(unsigned _history_table_index)
+void LWModule::incrementCount(unsigned _bundle_buffer_index)
 {
-	historyTable[_history_table_index].count++;
+	bundleBuffer[_bundle_buffer_index].count++;
 }
 
 void LWModule::setStartInstAddr(unsigned _history_table_index, Addr _start_addr)
@@ -136,9 +138,9 @@ void LWModule::setLWRelIdx(unsigned _history_table_index, unsigned reg_idx, unsi
 	historyTable[_history_table_index].lw_index_list[reg_idx].rel_index = _rel_idx;
 }
 
-void LWModule::setBundleCommit(unsigned _history_table_index)
+void LWModule::setBundleCommit(unsigned _bundle_buffer_index)
 {
-	historyTable[_history_table_index].bundle_commit = true;
+	bundleBuffer[_bundle_buffer_index].bundle_commit = true;
 }
 
 void LWModule::resetBundleCommit(unsigned _history_table_index)
@@ -149,4 +151,14 @@ void LWModule::resetBundleCommit(unsigned _history_table_index)
 void LWModule::setCountZero(unsigned _history_table_index)
 {
 	historyTable[_history_table_index].count = 0;
+}
+
+void LWModule::setValid(unsigned _history_table_index)
+{
+	historyTable[_history_table_index].valid = true;
+}
+
+void LWModule::resetValid(unsigned _history_table_index)
+{
+	historyTable[_history_table_index].valid = false;
 }

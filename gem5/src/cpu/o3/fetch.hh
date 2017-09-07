@@ -409,6 +409,7 @@ class DefaultFetch
 	bool hasInstPCReg(DynInstPtr &inst);
 	bool isEliminatedMovInst(DynInstPtr &inst);
 	void printBundleInfo(unsigned bundle_idx);
+	void pushBundleInfoToBuffer(DynInstPtr &inst);
 
 /*******************************************************************/
 
@@ -421,6 +422,10 @@ class DefaultFetch
 	int16_t global_history_table_idx;
 
 	BundleStatus global_bundle_status;
+
+	unsigned global_bundle_inst_num;
+
+	Addr global_start_inst_addr;
 
 /*******************************************************************/
   private:
@@ -498,6 +503,9 @@ class DefaultFetch
 
 	/* Flag to enable bundle commimt */
 	bool isBundleCommitUsed;
+
+	/* Max bundle instruction num */
+	unsigned bundleLimit;
 
 	/* Number of history table entries */
 	unsigned historyTableEntries;

@@ -938,6 +938,15 @@ DefaultCommit<Impl>::commit()
 				/******************************************************/
 				// Misprediction detection
 				/******************************************************/
+				if(isBundleCommitUsed == true)
+				{
+
+					DynInstPtr inst = toIEW->commitInfo[tid].mispredictInst;
+					if(inst->bundle_status == 1)
+					{
+						popBundleFromBufferDueToSquash(inst);
+					}
+				}
             }
 
             toIEW->commitInfo[tid].pc = fromIEW->pc[tid];
@@ -1041,10 +1050,9 @@ DefaultCommit<Impl>::commitInsts()
 		/* Traditional commit operation */
 /*******************************************************************/
 		if(isBundleCommitUsed == false 
-				|| (getCommitMode(head_inst) == Convention)
-				|| (getCommitMode(head_inst) == Analysis)
-				|| isSetExceptionFlag(head_inst) 
+				|| (getCommitMode(head_inst) != Bundle)
 				|| (getCommitMode(head_inst) == Bundle && isPossibleBundleCommit(head_inst))
+				|| isSetExceptionFlag(head_inst) 
 				)
 		{
 		if(isBundleCommitUsed == true &&
@@ -1266,7 +1274,6 @@ bool DefaultCommit<Impl>::commitHead(DynInstPtr &head_inst, unsigned inst_num)
 		{
 			DPRINTF(Commit, "BundleCommit: Instruction is tried to analysis [sn:%i]\n",
 					head_inst->seqNum);
-			// TODO: How to handle syscall
 			analysisInst(head_inst);
 		}
 
@@ -1274,16 +1281,9 @@ bool DefaultCommit<Impl>::commitHead(DynInstPtr &head_inst, unsigned inst_num)
 		if(head_inst->isEndInstInBundle == true
 				&& getCommitMode(head_inst) == Bundle)
 		{
-			resetBundleCommitFlag(head_inst);
+			popBundleFromBundleBuffer(head_inst);
 
-			if(isSetExceptionFlag(head_inst))
-			{
-				resetBundleException(head_inst);
-			}
-			else
-			{
-				numOfCommittedBundle++;
-			}
+			numOfCommittedBundle++;
 		}
 	}
 
@@ -1343,6 +1343,12 @@ bool DefaultCommit<Impl>::commitHead(DynInstPtr &head_inst, unsigned inst_num)
 
         // Generate trap squash event.
         generateTrapEvent(tid, inst_fault);
+
+		if(isBundleCommitUsed == true)
+		{
+			popAllBufferFromBundleBuffer();
+		}
+
         return false;
     }
 
@@ -1518,18 +1524,17 @@ DefaultCommit<Impl>::markCompletedInsts()
 			if(isBundleCommitUsed == true)
 			{
 			
-			DynInstPtr inst = fromIEW->insts[inst_num];
+			DynInstPtr &inst = fromIEW->insts[inst_num];
 
 			if(getCommitMode(inst) == Bundle)
 			{
-				int16_t history_table_idx = inst->history_table_idx;
-				LWModule::BundleHistory &bundle_history = lwModule->historyTable[history_table_idx];
+				unsigned bundle_buffer_idx = getBundleBufferIdx(inst);
+				LWModule::BundleHistory &bundle_history = lwModule->bundleBuffer[bundle_buffer_idx];
 				DPRINTF(Commit, "BundleCommit: instruction is bundle mode [sn:%i]\n",
 						inst->seqNum);
 
 				// Bundle mode 
-				if(getCommitMode(inst) == Bundle &&
-						bundle_history.exception == false &&
+				if(bundle_history.exception == false &&
 						bundle_history.size != 0)
 				{
 					incrementInstCountInBundle(inst);
@@ -1538,11 +1543,6 @@ DefaultCommit<Impl>::markCompletedInsts()
 					setBundleEnableFlag(inst);
 				}
 
-				if(getCommitMode(inst) == Convention)
-				{
-					DPRINTF(Commit, "BundleCommit: instruction is convention mode [sn:%i]\n",
-							inst->seqNum);
-				}
 				assert(bundle_history.exception == false);
 
 			}
@@ -1716,8 +1716,8 @@ bool DefaultCommit<Impl>::isLastWriter(DynInstPtr &inst, unsigned &global_rel_id
 {
 	unsigned num_dest_arch_regs = inst->numDestRegs();
 	bool result = true;
-		LWModule::BundleHistory bundle_history = 
-			lwModule->historyTable[inst->history_table_idx];
+	LWModule::BundleHistory &bundle_history = 
+		lwModule->historyTable[inst->history_table_idx];
 
 	for(int dest_idx = 0; dest_idx < num_dest_arch_regs; dest_idx++)
 	{
@@ -1763,14 +1763,16 @@ void DefaultCommit<Impl>::incrementInstCountInBundle(DynInstPtr &inst)
 {
 	assert(inst->history_table_idx != -1);
 
-	lwModule->incrementCount(inst->history_table_idx);
+	unsigned bundle_buffer_idx = getBundleBufferIdx(inst);
+	lwModule->incrementCount(bundle_buffer_idx);
 
-	uint16_t dispatched_inst_count = lwModule->historyTable[inst->history_table_idx].count;
-	uint16_t bundle_size = lwModule->historyTable[inst->history_table_idx].size;
+	uint16_t dispatched_inst_count = lwModule->bundleBuffer[bundle_buffer_idx].count;
+	uint16_t bundle_size = lwModule->bundleBuffer[bundle_buffer_idx].size;
 
-	DPRINTF(Commit, "BundleCommit: History table idx: %d, dispatched inst num: %d, "
-			"bundle size: %d, count: %d [sn:%i]\n", inst->history_table_idx,
-			dispatched_inst_count, bundle_size, inst->seqNum);
+	DPRINTF(Commit, "BundleCommit: History table idx: %d, bundleBuffer idx: %d"
+			"bundle size: %d, count: %d [sn:%i]\n", 
+			inst->history_table_idx, bundle_buffer_idx,
+			bundle_size, dispatched_inst_count, inst->seqNum);
 
 	if(dispatched_inst_count > bundle_size)
 	{
@@ -1783,8 +1785,9 @@ void DefaultCommit<Impl>::setBundleEnableFlag(DynInstPtr &inst)
 {
 	assert(inst->history_table_idx != -1);
 
-	LWModule::BundleHistory bundle_history = 
-		lwModule->historyTable[inst->history_table_idx];
+	unsigned bundle_buffer_idx = getBundleBufferIdx(inst);
+	LWModule::BundleHistory &bundle_history = 
+		lwModule->bundleBuffer[bundle_buffer_idx];
 
 	if(bundle_history.size == bundle_history.count)
 	{
@@ -1792,7 +1795,7 @@ void DefaultCommit<Impl>::setBundleEnableFlag(DynInstPtr &inst)
 				bundle_history.size, bundle_history.count, inst->seqNum);
 		
 //		bundle_history.count = 0;
-		lwModule->setBundleCommit(inst->history_table_idx);
+		lwModule->setBundleCommit(bundle_buffer_idx);
 		DPRINTF(Commit, "BundleCommit: bundle commit is possible [sn:%i]\n",
 				inst->seqNum);
 	}
@@ -1801,8 +1804,9 @@ void DefaultCommit<Impl>::setBundleEnableFlag(DynInstPtr &inst)
 template <typename Impl>
 bool DefaultCommit<Impl>::isPossibleBundleCommit(DynInstPtr &inst)
 {
-	LWModule::BundleHistory bundle_history = 
-		lwModule->historyTable[inst->history_table_idx];
+	unsigned bundle_buffer_idx = getBundleBufferIdx(inst);
+	LWModule::BundleHistory &bundle_history = 
+		lwModule->bundleBuffer[bundle_buffer_idx];
 
 	assert(inst->history_table_idx != -1);
 
@@ -1818,9 +1822,10 @@ template <typename Impl>
 bool DefaultCommit<Impl>::isSetExceptionFlag(DynInstPtr &inst)
 {
 	assert(inst->history_table_idx != -1);
+	unsigned bundle_buffer_idx = getBundleBufferIdx(inst);
 
 	LWModule::BundleHistory &bundle_history = 
-		lwModule->historyTable[inst->history_table_idx];
+		lwModule->bundleBuffer[bundle_buffer_idx];
 	
 	if(bundle_history.exception == true)
 	{
@@ -1837,40 +1842,29 @@ bool DefaultCommit<Impl>::isSetExceptionFlag(DynInstPtr &inst)
 template <typename Impl>
 void DefaultCommit<Impl>::analysisInst(DynInstPtr &inst)
 {
+	assert(inst->bundle_status == 2);
 	assert(inst->history_table_idx != -1);
-	LWModule::BundleHistory &bundle_history = 
-		lwModule->historyTable[inst->history_table_idx];
-	
+
 	unsigned num_dest_arch_regs = inst->numDestRegs();
 
-	DPRINTF(Commit, "BundleCommit: (bundle idx: %d) [sn:%i]\n",
+	LWModule::BundleHistory &bundle_history = 
+		lwModule->historyTable[inst->history_table_idx];
+
+	DPRINTF(Commit, "BundleCommit: (bundle history idx: %d) [sn:%i]\n",
 			inst->history_table_idx, inst->seqNum);
 	
 	// If instruction is start instruction of its bundle 
 	if(inst->isStartInstInBundle == true)
 	{
-//	DPRINTF(Commit, "BundleCommit: Before incrementing size, size: %d\n",
-//		bundle_history.start_inst_pc, bundle_history.size);
-
 		// Bundle clear to write new bundle info
 		lwModule->clearBundleHistory(inst->history_table_idx);
-		DPRINTF(Commit, "BundleCommit: LWIL is clear [sn:%i]\n",
-				inst->seqNum);
+//		DPRINTF(Commit, "BundleCommit: LWIL is clear [sn:%i]\n",
+//				inst->seqNum);
 
+		// Writer start address to bundlebuffer
 		DPRINTF(Commit, "BundleCommit: Start instruction is committed [sn:%i]\n",
 				inst->seqNum);
 		lwModule->setStartInstAddr(inst->history_table_idx, inst->instAddr());
-	}
-
-	// Branch instruction indicates end point 
-	if(inst->isEndInstInBundle == true
-			|| inst->getFault() != NoFault)
-	{
-		assert(inst->isControl() || inst->isUncondCtrl());
-
-		DPRINTF(Commit, "BundleCommit: End instruction is committed [sn:%i]\n",
-				inst->seqNum);
-		lwModule->setEndInstAddr(inst->history_table_idx, inst->instAddr());
 	}
 
 	// Increment size of bundle 
@@ -1878,7 +1872,7 @@ void DefaultCommit<Impl>::analysisInst(DynInstPtr &inst)
 	int bundle_size = bundle_history.size;
 
 	DPRINTF(Commit, "BundleCommit: Start instruction address: %d, size: %d\n",
-		bundle_history.start_inst_pc, bundle_history.size);
+		bundle_history.start_inst_pc, bundle_size);
 
 	for(int dest_idx = 0; dest_idx < num_dest_arch_regs; dest_idx++)
 	{
@@ -1888,14 +1882,35 @@ void DefaultCommit<Impl>::analysisInst(DynInstPtr &inst)
 		// relative index in a bundle
 		lwModule->setLWRelIdx(inst->history_table_idx, dest_reg, bundle_size);
 	}
+
+	DPRINTF(Commit, "BundleCommit: Test\n");
+	
+	// Branch instruction indicates end point 
+	if(inst->isEndInstInBundle == true
+			|| inst->getFault() != NoFault)
+	{
+		assert(inst->isControl() || inst->isUncondCtrl() || inst->getFault() != NoFault);
+
+		DPRINTF(Commit, "BundleCommit: End instruction is committed [sn:%i]\n",
+				inst->seqNum);
+		// set end instruction address
+		lwModule->setEndInstAddr(inst->history_table_idx, inst->instAddr());
+
+		// set valid bit
+		lwModule->setValid(inst->history_table_idx);
+
+//		// write info to bundle history table
+//		writeBundleInfoToHistoryTable(bundle_buffer_idx, inst->history_table_idx);
+	}
 }
 
 template <typename Impl>
 void DefaultCommit<Impl>::resetBundleException(DynInstPtr &inst)
 {
 	assert(inst->history_table_idx != -1);
+	int bundle_buffer_size = lwModule->bundleBuffer.size();
 
-	lwModule->resetException(inst->history_table_idx);
+	lwModule->resetException(bundle_buffer_size);
 	DPRINTF(Commit, "BundleCommit: This instruction  is end of the bundle\n");
 	DPRINTF(Commit, "BundleCommit: Bundle history table[%d] exception flag reset [sn:%i]\n",
 		inst->history_table_idx, inst->seqNum);
@@ -1913,6 +1928,111 @@ void DefaultCommit<Impl>::resetBundleCommitFlag(DynInstPtr &inst)
 
 	lwModule->setCountZero(inst->history_table_idx);
 	lwModule->resetBundleCommit(inst->history_table_idx);
+}
+
+template <typename Impl>
+unsigned DefaultCommit<Impl>::getBundleBufferIdx(DynInstPtr &inst)
+{
+	int start_inst_addr = inst->start_inst_pc;;
+//	start_inst_addr = lwModule->historyTable[_history_table_idx].start_inst_pc;
+	int bundle_buffer_size = lwModule->bundleBuffer.size();
+	int assert_count = 0;
+	int result = 0;
+
+	assert(start_inst_addr != 0);
+
+	// If there is no bundle in bundleBuffer
+	assert(bundle_buffer_size != 0);
+	
+	for(int idx=0; idx<bundle_buffer_size; idx++)
+	{
+		int bundle_start_addr = lwModule->bundleBuffer[idx].start_inst_pc;
+
+//		DPRINTF(Commit, "********** Get BundleBuffer idx: %d, size: %d, start_addr: %d "
+//				",bundle_start_addr: %d *********\n",
+//			idx, bundle_buffer_size, start_inst_addr, bundle_start_addr);
+
+		if(start_inst_addr == bundle_start_addr)
+		{
+//			DPRINTF(Commit, "********** Get BundleBuffer idx: %d, size: %d, start_addr: %d *********\n",
+//				idx, bundle_buffer_size, start_inst_addr);
+			result = idx;
+			assert_count++;
+			break;
+		}
+	}
+
+	assert(assert_count != 0);
+	return result;
+}
+
+template <typename Impl>
+void DefaultCommit<Impl>::writeBundleInfoToHistoryTable
+(unsigned bundle_buffer_idx, unsigned history_table_idx)
+{
+	LWModule::BundleHistory &from_bundle_history = 
+		lwModule->bundleBuffer[bundle_buffer_idx];
+
+	LWModule::BundleHistory &to_bundle_history = 
+		lwModule->historyTable[history_table_idx];
+	
+	to_bundle_history = from_bundle_history;
+//	to_bundle_history.size = from_bundle_history.size;
+//	to_bundle_history.start_inst_pc = from_bundle_history.start_inst_pc;
+//	to_bundle_history.end_inst_pc = from_bundle_history.end_inst_pc;
+}
+
+template <typename Impl>
+void DefaultCommit<Impl>::popBundleFromBundleBuffer(DynInstPtr &inst)
+{
+	unsigned bundle_buffer_idx = getBundleBufferIdx(inst);
+
+	LWModule::BundleHistory &bundle_history = 
+		lwModule->bundleBuffer[bundle_buffer_idx];
+
+	assert(bundle_history.count == bundle_history.size);
+	assert(bundle_history.valid == true);
+
+	DPRINTF(Commit, "BundleCommit: this bundle (bundle history idx: %d, "
+			"bundleBuffer idx: %d) is popped from bundleBuffer\n",
+		inst->seqNum, bundle_buffer_idx);
+
+	lwModule->bundleBuffer.pop_front();
+	DPRINTF(Commit, "BundleBuffer size: %d\n", lwModule->bundleBuffer.size());
+}
+
+template <typename Impl>
+void DefaultCommit<Impl>::popBundleFromBufferDueToSquash(DynInstPtr &inst)
+{
+	DPRINTF(Commit, "Popping bundle history from bundleBuffer [sn:%i]\n",
+			inst->seqNum);
+	unsigned bundle_buffer_idx = getBundleBufferIdx(inst);
+	int bundle_buffer_size = lwModule->bundleBuffer.size();
+
+	for(int i=0; i<(bundle_buffer_size-bundle_buffer_idx-1); i++)
+	{
+		LWModule::BundleHistory bundle_history = 
+			lwModule->bundleBuffer.back();
+		DPRINTF(Commit, "Squashing: bundlebuffer idx: %d, size: %d\n",
+				bundle_buffer_size-1-i, bundle_history.size);
+
+		DPRINTF(Commit, "BundleCommit: Popping bundle from bundleBuffer\n");
+		lwModule->bundleBuffer.pop_back();
+	}
+}
+
+template <typename Impl>
+void DefaultCommit<Impl>::popAllBufferFromBundleBuffer(void)
+{
+	int bundle_buffer_size = lwModule->bundleBuffer.size();
+
+	DPRINTF(Commit, "Fault causes popping bundlehistory from bundleBuffer (bundleBuffer size:%d)\n",
+			bundle_buffer_size);
+
+	for(int i=0; i<bundle_buffer_size; i++)
+	{
+		lwModule->bundleBuffer.pop_back();
+	}
 }
 
 #endif//__CPU_O3_COMMIT_IMPL_HH__

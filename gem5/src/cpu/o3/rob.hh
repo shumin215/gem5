@@ -312,6 +312,9 @@ class ROB
     /** Reset the ROB state */
     void resetState();
 
+	// Get bundleBuffer index 
+	unsigned getBundleBufferIdx(DynInstPtr &inst);
+
     /** Pointer to the CPU. */
     O3CPU *cpu;
 

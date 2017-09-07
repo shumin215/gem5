@@ -11,6 +11,7 @@
 #include <utility>
 #include <algorithm>
 #include <vector>
+#include <deque>
 
 #include "base/trace.hh"
 #include "config/the_isa.hh"
@@ -23,13 +24,11 @@ class LWModule
 	public:
 		typedef TheISA::RegIndex RegIndex;
 
-		unsigned bundle_buffer_limit;
-
-	private:
 		const std::string name;
 		unsigned num_of_entries;
 		unsigned num_of_arch_regs;
 
+	private:
 		struct LWIL
 		{
 			LWIL()
@@ -46,6 +45,16 @@ class LWModule
 		/* History Information from a bundle */
 		struct BundleHistory 
 		{
+			BundleHistory()
+			{
+				start_inst_pc = 0;
+				end_inst_pc = 0;
+				size = 0;
+				exception = false;
+				count = 0;
+				bundle_commit = false;
+				valid = false;
+			}
 			/* The PC address of start instruction in a bundle */
 			Addr start_inst_pc;
 			/* The PC address of end instruction in a bundle */
@@ -60,6 +69,8 @@ class LWModule
 			unsigned count;
 			/* Bundle commit enable flag */
 			bool bundle_commit;
+			/* Valid bit*/
+			bool valid;
 
 			void operator=(BundleHistory &_bundleHistory)
 			{
@@ -69,14 +80,18 @@ class LWModule
 				this->count = _bundleHistory.count;
 				this->bundle_commit = _bundleHistory.bundle_commit;
 				this->lw_index_list.swap(_bundleHistory.lw_index_list);
+				this->valid = _bundleHistory.valid;
 			}
 		};
 
 	/* Constructor */
 	public:
+		unsigned bundle_buffer_limit;
+
 		LWModule(const std::string &_my_name,
 				unsigned _num_of_entries,
-				unsigned _num_of_arch_regs);
+				unsigned _num_of_arch_regs,
+				unsigned _bundle_buffer_limit);
 
 	/* Destructor */
 		~LWModule() 
@@ -84,10 +99,10 @@ class LWModule
 		}
 
 		/* History Table */
-		std::vector<BundleHistory> historyTable;
+		std::deque<BundleHistory> historyTable;
 
 		/* Bundle Buffer */
-		std::vector<BundleHistory> bundleBuffer;
+		std::deque<BundleHistory> bundleBuffer;
 
 	/* Member Functions */
 		std::string getName() const
@@ -121,6 +136,8 @@ class LWModule
 		void setBundleCommit(unsigned _history_table_index);
 		void resetBundleCommit(unsigned _history_table_index);
 		void setCountZero(unsigned _history_table_index);
+		void setValid(unsigned _history_table_index);
+		void resetValid(unsigned _history_table_index);
 };
 
 #endif
