@@ -134,6 +134,11 @@ class DerivO3CPU(BaseCPU):
     numIQEntries = Param.Unsigned(64, "Number of instruction queue entries")
     numROBEntries = Param.Unsigned(192, "Number of reorder buffer entries")
 
+    isBundleCommitUsed = Param.Bool(True, "Bundle Commit mode is applied")
+    bundleLimit = Param.Unsigned(128, "Number of instructions in bundle")
+    historyTableEntries = Param.Unsigned(79, "Number of historytable entries")
+    bundleBufferEntries = Param.Unsigned(192, "Number of bundle buffer entries")
+
     smtNumFetchingThreads = Param.Unsigned(1, "SMT Number of Fetching Threads")
     smtFetchPolicy = Param.String('SingleThread', "SMT Fetch policy")
     smtLSQPolicy    = Param.String('Partitioned', "SMT LSQ Sharing Policy")

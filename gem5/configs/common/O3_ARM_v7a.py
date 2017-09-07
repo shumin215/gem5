@@ -147,6 +147,10 @@ class O3_ARM_v7a_3(DerivO3CPU):
     numPhysFloatRegs = 192
     numIQEntries = 64
     numROBEntries = 128
+    isBundleCommitUsed = False
+    bundleLimit = 128 
+    historyTableEntries = 79
+    bundleBufferEntries = 16 
 
     switched_out = False
     branchPred = O3_ARM_v7a_BP()
