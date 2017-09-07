@@ -1278,6 +1278,9 @@ DefaultIEW<Impl>::dispatchInsts(ThreadID tid)
 #endif
         ppDispatch->notify(inst);
     }
+	DPRINTF(IEW, "Store Queue free size : %d\n", ldstQueue.numFreeStoreEntries(tid));
+
+
 	DPRINTF(IEW, "Debug: dispatchedToSQ:%d After dispatching\n",
 			toRename->iewInfo[tid].dispatchedToSQ);
 

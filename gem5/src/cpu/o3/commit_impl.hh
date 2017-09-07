@@ -1187,12 +1187,6 @@ DefaultCommit<Impl>::commitInsts()
         }
 
 		} // isBundleCommitUsed || commitStatus 
-		/* Atomic commitment */
-/*******************************************************************/
-//		else if(isBundleCommitUsed == true && isBundleMode(head_inst))
-//		{
-//		}
-/*******************************************************************/
     }
 
     DPRINTF(CommitRate, "%i\n", num_committed);
@@ -1845,7 +1839,7 @@ void DefaultCommit<Impl>::analysisInst(DynInstPtr &inst)
 	assert(inst->bundle_status == 2);
 	assert(inst->history_table_idx != -1);
 
-	unsigned num_dest_arch_regs = inst->numDestRegs();
+//	unsigned num_dest_arch_regs = inst->numDestRegs();
 
 	LWModule::BundleHistory &bundle_history = 
 		lwModule->historyTable[inst->history_table_idx];
@@ -1858,8 +1852,6 @@ void DefaultCommit<Impl>::analysisInst(DynInstPtr &inst)
 	{
 		// Bundle clear to write new bundle info
 		lwModule->clearBundleHistory(inst->history_table_idx);
-//		DPRINTF(Commit, "BundleCommit: LWIL is clear [sn:%i]\n",
-//				inst->seqNum);
 
 		// Writer start address to bundlebuffer
 		DPRINTF(Commit, "BundleCommit: Start instruction is committed [sn:%i]\n",
@@ -1897,10 +1889,7 @@ void DefaultCommit<Impl>::analysisInst(DynInstPtr &inst)
 		lwModule->setEndInstAddr(inst->history_table_idx, inst->instAddr());
 
 		// set valid bit
-		lwModule->setValid(inst->history_table_idx);
-
-//		// write info to bundle history table
-//		writeBundleInfoToHistoryTable(bundle_buffer_idx, inst->history_table_idx);
+//		lwModule->setValid(inst->history_table_idx);
 	}
 }
 
