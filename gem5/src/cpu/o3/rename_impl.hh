@@ -69,6 +69,7 @@ DefaultRename<Impl>::DefaultRename(O3CPU *_cpu, DerivO3CPUParams *params)
       commitToRenameDelay(params->commitToRenameDelay),
       renameWidth(params->renameWidth),
 	  isMovEliUsed(params->isMovEliUsed),
+	  isBCUsed(params->isBundleCommitUsed),
       commitWidth(params->commitWidth),
       numThreads(params->numThreads),
       maxPhysicalRegs(params->numPhysIntRegs + params->numPhysFloatRegs
@@ -88,6 +89,12 @@ std::string
 DefaultRename<Impl>::name() const
 {
     return cpu->name() + ".rename";
+}
+
+template <typename Impl>
+void DefaultRename<Impl>::setLWModule(LWModule *_lwModule)
+{
+	lwModule = _lwModule;
 }
 
 template <class Impl>

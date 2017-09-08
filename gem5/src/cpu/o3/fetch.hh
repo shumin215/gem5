@@ -57,6 +57,8 @@
 #include "sim/eventq.hh"
 #include "sim/probe/probe.hh"
 
+#include "cpu/o3/last_writer_module.hh"
+
 struct DerivO3CPUParams;
 
 /**
@@ -207,6 +209,9 @@ class DefaultFetch
     /** Returns the name of fetch. */
     std::string name() const;
 
+	// Set pointer to lwmodule 
+	void setLWModule(LWModule *_lwModule);
+
     /** Registers statistics. */
     void regStats();
 
@@ -321,6 +326,17 @@ class DefaultFetch
     /** Checks if a thread is stalled. */
     bool checkStall(ThreadID tid) const;
 
+/***********************************************************************
+ *  	Bundle Commit
+ * ******************************************************************/
+
+	// Check if instruction can be bundle committed
+	bool isPresentInBHT(DynInstPtr &inst);
+
+	// push bundle info corresponding this instruction to BQ
+	void pushBundleInfoToBQ(DynInstPtr &inst);
+
+/**********************************************************************/
     /** Updates overall fetch stage status; to be called at the end of each
      * cycle. */
     FetchStatus updateFetchStatus();
@@ -458,6 +474,18 @@ class DefaultFetch
 
     /** The width of decode in instructions. */
     unsigned decodeWidth;
+
+	// If bundle commit is used
+	bool isBCUsed;
+
+	// the Bundle History Table Entries
+	unsigned BHTEntries;
+
+	// Bundle Queue Limit
+	unsigned BQ_Limit;
+
+	// Last Writer Module
+	LWModule *lwModule;
 
     /** Is the cache blocked?  If so no threads can access it. */
     bool cacheBlocked;

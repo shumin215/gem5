@@ -102,6 +102,8 @@ DefaultCommit<Impl>::DefaultCommit(O3CPU *_cpu, DerivO3CPUParams *params)
       fetchToCommitDelay(params->commitToFetchDelay),
       renameWidth(params->renameWidth),
       commitWidth(params->commitWidth),
+	  isBCUsed(params->isBundleCommitUsed),
+	  BHTEntries(params->historyTableEntries),
       numThreads(params->numThreads),
       drainPending(false),
       drainImminent(false),
@@ -165,6 +167,12 @@ std::string
 DefaultCommit<Impl>::name() const
 {
     return cpu->name() + ".commit";
+}
+
+template <typename Impl>
+void DefaultCommit<Impl>::setLWModule(LWModule *_lwModule)
+{
+	lwModule = _lwModule;
 }
 
 template <class Impl>
@@ -386,6 +394,9 @@ DefaultCommit<Impl>::startupStage()
     cpu->activateStage(O3CPU::CommitIdx);
 
     cpu->activityThisCycle();
+
+	isStartInBundle = true;
+	BHT_idx = -1;
 }
 
 template <class Impl>
@@ -1195,6 +1206,71 @@ DefaultCommit<Impl>::commitHead(DynInstPtr &head_inst, unsigned inst_num)
     if (!head_inst->isStore() && inst_fault == NoFault) {
         head_inst->setCompleted();
     }
+/***********************************************************************
+ *  	Bundle Commit
+ *
+ *  	Analysis instructions to make bundle history table entry
+ *  						or
+ *  	Pop bundle info from Bundle Queue 
+ * ******************************************************************/
+	if(isBCUsed == true)
+	{
+		
+	// This instruction is for bundle commit 
+	if(head_inst->bundle_info != NULL)
+	{
+		//TODO: If end instruction in bundle, 
+		if(isEndInBundle(head_inst))
+		{
+			//TODO: pop bundle info from Bundle Queue
+			popBundleInfo(head_inst);
+		}
+	}
+	// Analysis
+	else
+	{
+		// Start instruction in bundle
+		if(isStartInBundle)
+		{
+			isStartInBundle = false;
+
+			// Set bundle history table index
+			BHT_idx = head_inst->instAddr() % BHTEntries;
+
+			// Clear BHT entry
+			lwModule->clearBHTEntry(BHT_idx);
+			// Set inst seq num to BHT
+			lwModule->setStartPCToBHT(BHT_idx, head_inst->instAddr());
+//			// Increase size in BHT
+//			lwModule->incrementSizeToBHT(BHT_idx);
+		}
+		
+		// Set bundle information in LWIT
+		setBundleInfoTOBHT(head_inst, BHT_idx);
+		// Increase size in BHT
+		lwModule->incrementSizeToBHT(BHT_idx);
+
+		// End instruction in bundle
+		if(head_inst->isControl()
+				|| head_inst->isUncondCtrl()
+				|| inst_fault != NoFault
+		  )
+		{
+			isStartInBundle = true;
+
+			assert(BHT_idx != -1);
+			// Set end instruction pc
+			lwModule->setEndPCToBHT(BHT_idx, head_inst->instAddr());
+			// set valid to BHT
+			lwModule->setValidToBHT(BHT_idx);
+
+			// Reset BHT index
+			BHT_idx = -1;
+		}
+	}
+
+	}
+/**********************************************************************/
 
     if (inst_fault != NoFault) {
         DPRINTF(Commit, "Inst [sn:%lli] PC %s has a fault\n",
@@ -1327,6 +1403,46 @@ DefaultCommit<Impl>::getInsts()
             commitStatus[tid] != TrapPending) {
             changedROBNumEntries[tid] = true;
 
+/***********************************************************************
+ *  	Bundle Commit
+ *
+ *  	Set start seq and end seq in Bundle Queue
+ *  				and
+ *  	Insert Last Writer only to ROB
+ * ******************************************************************/
+		if(isBCUsed == true)
+		{
+
+		// If instruction is bundle mode
+		if(inst->bundle_info != NULL)
+		{
+			DPRINTF(Commit, "** This instruction is dispatched to ROB[Bundle Mode][sn:%i]\n",
+					inst->seqNum);
+
+			// TODO:If instruction is not last writer
+			if(!isLastWriter(inst))
+			{
+				// Set last writer flag for retire stage
+				inst->isLW = false;
+				DPRINTF(Commit, "*** Non-Last Writer [sn:%i]***\n",
+						inst->seqNum);
+				//TODO Increment ROB Max entry
+				rob->incrementROBMaxEntry(tid);
+				DPRINTF(Commit, "***ROB MaxEntry:%d, Free Entry:%d, [sn:%i]\n",
+					rob->getMaxEntries(tid), rob->numFreeEntries(), inst->seqNum);
+
+				numOfNonLastWriter++;
+			}
+			// If instruction is last writer
+			else
+			{
+				numOfLastWriter++;
+			}
+		}
+
+		}
+/**********************************************************************/
+
             DPRINTF(Commit, "Inserting PC %s [sn:%i] [tid:%i] into ROB.\n",
                     inst->pcState(), inst->seqNum, tid);
 
@@ -1360,6 +1476,30 @@ DefaultCommit<Impl>::markCompletedInsts()
 
             // Mark the instruction as ready to commit.
             fromIEW->insts[inst_num]->setCanCommit();
+
+/***********************************************************************
+ *  	Bundle Commit
+ *
+ *  	Increment counter and 
+ *  	if instruction can be committed as bundle, set to bundle commit flag
+ * ******************************************************************/
+			if(isBCUsed == true)
+			{
+
+			DynInstPtr inst = fromIEW->insts[inst_num];
+
+			// If instruction is bundle mode
+			if(inst->bundle_info != NULL)
+			{
+				DPRINTF(Commit, "** Increment count in bundle info [Bundle Mode][sn:%i]\n",
+						inst->seqNum);
+				incrementCount(inst);
+
+				checkCanBundleCommit(inst);
+			}
+
+			}
+/**********************************************************************/
         }
     }
 }
@@ -1520,6 +1660,72 @@ DefaultCommit<Impl>::oldestReady()
     } else {
         return InvalidThreadID;
     }
+}
+
+template<typename Impl>
+void DefaultCommit<Impl>::incrementCount(DynInstPtr &inst)
+{
+	LWModule::BundleQueueEntry &bundle_info = *(inst->bundle_info);
+
+	lwModule->incrementCountToBQ(bundle_info);
+	DPRINTF(Commit, "** BundleCount:%d [sn:%i]\n",
+			bundle_info.count, inst->seqNum);
+}
+
+template <typename Impl>
+void DefaultCommit<Impl>::checkCanBundleCommit(DynInstPtr &inst)
+{
+	LWModule::BundleQueueEntry &bundle_info = *(inst->bundle_info);
+
+	DPRINTF(Commit, "** BundleCount:%d, BundleSize:%d [sn:%i]\n",
+			bundle_info.count, bundle_info.size, inst->seqNum);
+	if(bundle_info.count == bundle_info.size)
+	{
+		DPRINTF(Commit, "** This bundle can be committed\n");
+		lwModule->setBundleCommitToBQ(bundle_info);
+	}
+}
+
+template <typename Impl>
+void DefaultCommit<Impl>::setBundleInfoTOBHT(DynInstPtr &inst, unsigned BHT_idx)
+{
+	assert(BHT_idx != -1);
+	int num_dest_arch_reg = inst->numDestRegs();
+	int rel_idx = lwModule->bundleHistoryTable[BHT_idx].size;
+
+	for(int idx=0; idx<num_dest_arch_reg; idx++)
+	{
+		RegIndex dest_reg = inst->destRegIdx(idx);
+
+		// Set flag
+		lwModule->setLWFlagToBHT(BHT_idx, dest_reg);
+		// Set relative index 
+		lwModule->setLWRelIdx(BHT_idx, dest_reg, rel_idx);
+	}
+}
+
+// TODO: If this instruction is last writer when instruction is bundle mode
+ 
+template <typename Impl>
+bool DefaultCommit<Impl>::isLastWriter(DynInstPtr &inst)
+{
+	bool result = false;
+	assert(inst->bundle_info != NULL);
+
+	return result;
+}
+
+template <typename Impl>
+bool DefaultCommit<Impl>::isEndInBundle(DynInstPtr &inst)
+{
+	bool result = false;
+
+	return result;
+}
+
+template <typename Impl>
+void DefaultCommit<Impl>::popBundleInfo(DynInstPtr &inst)
+{
 }
 
 #endif//__CPU_O3_COMMIT_IMPL_HH__

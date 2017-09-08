@@ -55,6 +55,8 @@
 #include "debug/IEW.hh"
 #include "sim/probe/probe.hh"
 
+#include "cpu/o3/last_writer_module.hh"
+
 //#define ixuWidth 2
 //#define ixuDepth 4
 
@@ -165,6 +167,9 @@ class DefaultIEW
 
     /** Sets pointer to the scoreboard. */
     void setScoreboard(Scoreboard *sb_ptr);
+
+	// Set pointer to lwmodule 
+	void setLWModule(LWModule *_lwModule);
 
     /** Perform sanity checks after a drain. */
     void drainSanityCheck() const;
@@ -469,6 +474,12 @@ class DefaultIEW
 
     /** Width of issue, in instructions. */
     unsigned issueWidth;
+
+	// If bundle commit is used
+	bool isBCUsed;
+	
+	// Last Writer Module
+	LWModule *lwModule;
 
     /** Index into queue of instructions being written back. */
     unsigned wbNumInst;

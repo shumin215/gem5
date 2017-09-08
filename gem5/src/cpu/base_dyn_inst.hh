@@ -69,6 +69,8 @@
 #include "sim/byteswap.hh"
 #include "sim/system.hh"
 
+#include "cpu/o3/last_writer_module.hh"
+
 /**
  * @file
  * Defines a dynamic instruction context.
@@ -249,7 +251,15 @@ class BaseDynInst : public ExecContext, public RefCounted
 
 	/* This is for checking if the instruction is counted for committed instruction */
 	bool isCountedForStats;
+/***********************************************************************
+ *  	Bundle Commit
+ * ******************************************************************/
 
+	LWModule::BundleQueueEntry* bundle_info;
+
+	bool isLW;
+
+/**********************************************************************/
     /////////////////////// TLB Miss //////////////////////
     /**
      * Saved memory requests (needed when the DTB address translation is

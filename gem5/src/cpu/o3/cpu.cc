@@ -281,12 +281,12 @@ FullO3CPU<Impl>::FullO3CPU(DerivO3CPUParams *params)
     rename.setScoreboard(&scoreboard);
     iew.setScoreboard(&scoreboard);
 
-//	fetch.setLWModule(&lwModule);
-//	decode.setLWModule(&lwModule);
-//	rename.setLWModule(&lwModule);
-//	iew.setLWModule(&lwModule);
-//	commit.setLWModule(&lwModule);
-//	rob.setLWModule(&lwModule);
+	fetch.setLWModule(&lwModule);
+	decode.setLWModule(&lwModule);
+	rename.setLWModule(&lwModule);
+	iew.setLWModule(&lwModule);
+	commit.setLWModule(&lwModule);
+	rob.setLWModule(&lwModule);
 
     // Setup the rename map for whichever stages need it.
     for (ThreadID tid = 0; tid < numThreads; tid++) {

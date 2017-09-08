@@ -52,6 +52,7 @@
 #include "cpu/timebuf.hh"
 #include "sim/probe/probe.hh"
 
+#include "cpu/o3/last_writer_module.hh"
 struct DerivO3CPUParams;
 
 template <class>
@@ -163,6 +164,9 @@ class DefaultCommit
 
     /** Returns the name of the DefaultCommit. */
     std::string name() const;
+
+	// Set pointer to lwmodule 
+	void setLWModule(LWModule *_lwModule);
 
     /** Registers statistics. */
     void regStats();
@@ -316,6 +320,18 @@ class DefaultCommit
     /** Marks completed instructions using information sent from IEW. */
     void markCompletedInsts();
 
+	void incrementCount(DynInstPtr &inst);
+
+	void checkCanBundleCommit(DynInstPtr &inst);
+
+	void setBundleInfoTOBHT(DynInstPtr &inst, unsigned BHT_idx);
+
+	bool isLastWriter(DynInstPtr &inst);
+
+	bool isEndInBundle(DynInstPtr &inst);
+
+	void popBundleInfo(DynInstPtr &inst);
+
     /** Gets the thread to commit, based on the SMT policy. */
     ThreadID getCommittingThread();
 
@@ -441,6 +457,19 @@ class DefaultCommit
     /** Commit width, in instructions. */
     const unsigned commitWidth;
 
+	// If bundle commit is used
+	bool isBCUsed;
+
+	bool isStartInBundle;
+
+	unsigned BHT_idx;
+	
+	// the Bundle History Table Entries
+	unsigned BHTEntries;
+
+	// Last Writer Module
+	LWModule *lwModule;
+
     /** Number of Reorder Buffers */
     unsigned numRobs;
 
@@ -543,6 +572,10 @@ class DefaultCommit
 
     /** Number of cycles where the commit bandwidth limit is reached. */
     Stats::Scalar commitEligibleSamples;
+	// Number of Non-last Writer
+	Stats::Scalar numOfNonLastWriter;
+	// Number of last Writer
+	Stats::Scalar numOfLastWriter;
 };
 
 #endif // __CPU_O3_COMMIT_HH__

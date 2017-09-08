@@ -86,6 +86,9 @@ DefaultFetch<Impl>::DefaultFetch(O3CPU *_cpu, DerivO3CPUParams *params)
       commitToFetchDelay(params->commitToFetchDelay),
       fetchWidth(params->fetchWidth),
       decodeWidth(params->decodeWidth),
+	  isBCUsed(params->isBundleCommitUsed),
+	  BHTEntries(params->historyTableEntries),
+	  BQ_Limit(params->bundleBufferEntries),
       retryPkt(NULL),
       retryTid(InvalidThreadID),
       cacheBlkSize(cpu->cacheLineSize()),
@@ -164,6 +167,12 @@ std::string
 DefaultFetch<Impl>::name() const
 {
     return cpu->name() + ".fetch";
+}
+
+template <typename Impl>
+void DefaultFetch<Impl>::setLWModule(LWModule *_lwModule)
+{
+	lwModule = _lwModule;
 }
 
 template <class Impl>
@@ -959,6 +968,27 @@ DefaultFetch<Impl>::tick()
         ThreadID tid = *tid_itr;
         if (!stalls[tid].decode && !fetchQueue[tid].empty()) {
             auto inst = fetchQueue[tid].front();
+
+/***********************************************************************
+ *  	Bundle Commit
+ *
+ *  	Access Bundle History Table (BHT) for checking availability of bundle commit
+ * ******************************************************************/
+			if(isBCUsed == true)
+			{
+
+			// If instruction is for bundle commit
+			if(isPresentInBHT(inst))
+			{
+				DPRINTF(Fetch, "[BC] instruction can be committed as bundle unit [sn:%i]\n",
+						inst->seqNum);
+				// by referring instruction, push bundle info to BQ
+				pushBundleInfoToBQ(inst);
+			}
+
+			}
+/**********************************************************************/
+
             toDecode->insts[toDecode->size++] = inst;
             DPRINTF(Fetch, "[tid:%i][sn:%i]: Sending instruction to decode from "
                     "fetch queue. Fetch queue size: %i.\n",
@@ -1687,6 +1717,65 @@ DefaultFetch<Impl>::profileStall(ThreadID tid) {
         DPRINTF(Fetch, "[tid:%i]: Unexpected fetch stall reason (Status: %i).\n",
              tid, fetchStatus[tid]);
     }
+}
+
+template <typename Impl>
+bool DefaultFetch<Impl>::isPresentInBHT(DynInstPtr &inst)
+{
+	unsigned BHT_idx = inst->instAddr() % BHTEntries;
+	bool result = false;
+	LWModule::BundleHistoryEntry &bundle_history = 
+		lwModule->bundleHistoryTable[BHT_idx];
+
+	if(bundle_history.valid == true)
+	{
+		assert(bundle_history.size != 0);
+
+		if(inst->instAddr() == bundle_history.start_pc)
+		{
+			DPRINTF(Fetch, "** There is bundle history in BHT[%d] [sn:%i]\n",
+					BHT_idx, inst->seqNum);
+			result = true;
+		}
+	}
+
+	return result;
+}
+
+template <typename Impl>
+void DefaultFetch<Impl>::pushBundleInfoToBQ(DynInstPtr &inst)
+{
+	unsigned BHT_idx = inst->instAddr() % BHTEntries;
+	LWModule::BundleHistoryEntry &bundle_history = 
+		lwModule->bundleHistoryTable[BHT_idx];
+
+	assert(bundle_history.valid == true);
+
+	if(lwModule->bundleQueue.size() >= BQ_Limit)
+	{
+		DPRINTF(Fetch, "** BQ is full BQ_Size:%d[sn:%i]\n",
+				lwModule->bundleQueue.size(),inst->seqNum);
+		return;
+	}
+
+	LWModule::BundleQueueEntry new_bundle_info;
+
+	// Set infomation of the bundle 
+	lwModule->setSizeToBQ(new_bundle_info, bundle_history.size);
+
+	lwModule->setStartPCToBQ(new_bundle_info, inst->instAddr());
+
+	lwModule->setStartSeqToBQ(new_bundle_info, inst->seqNum);
+
+	lwModule->setLWITTOBQ(new_bundle_info, bundle_history);
+
+	// Set pointer to bundle queue entry to instruction 
+	inst->bundle_info = &new_bundle_info;
+
+	DPRINTF(Fetch, "** Bundle is entered to Bundle Queue [sn:%i]\n",
+			inst->seqNum);
+	// Push bundle info to Bundle Queue
+	lwModule->bundleQueue.push_back(new_bundle_info);
 }
 
 #endif//__CPU_O3_FETCH_IMPL_HH__

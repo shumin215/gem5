@@ -78,6 +78,7 @@ DefaultIEW<Impl>::DefaultIEW(O3CPU *_cpu, DerivO3CPUParams *params)
       issueToExecuteDelay(params->issueToExecuteDelay),
       dispatchWidth(params->dispatchWidth),
       issueWidth(params->issueWidth),
+	  isBCUsed(params->isBundleCommitUsed),
       wbWidth(params->wbWidth),
 	  isIXUUsed(params->isIXUUsed),
 	  ixuWidth(params->ixuWidth),
@@ -425,6 +426,12 @@ void
 DefaultIEW<Impl>::setScoreboard(Scoreboard *sb_ptr)
 {
     scoreboard = sb_ptr;
+}
+
+template <typename Impl>
+void DefaultIEW<Impl>::setLWModule(LWModule *_lwModule)
+{
+	lwModule = _lwModule;
 }
 
 template <class Impl>

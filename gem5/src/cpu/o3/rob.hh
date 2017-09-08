@@ -52,6 +52,7 @@
 #include "base/types.hh"
 #include "config/the_isa.hh"
 
+#include "cpu/o3/last_writer_module.hh"
 struct DerivO3CPUParams;
 
 /**
@@ -99,6 +100,9 @@ class ROB
     ROB(O3CPU *_cpu, DerivO3CPUParams *params);
 
     std::string name() const;
+	//
+	// Set pointer to lwmodule 
+	void setLWModule(LWModule *_lwModule);
 
     /** Sets pointer to the list of active threads.
      *  @param at_ptr Pointer to the list of active threads.
@@ -179,6 +183,18 @@ class ROB
     /** Returns the maximum number of entries for a specific thread. */
     unsigned getMaxEntries(ThreadID tid)
     { return maxEntries[tid]; }
+
+	void incrementROBMaxEntry(ThreadID tid)
+	{
+		this->maxEntries[tid]++;
+	}
+
+	void decrementROBMaxEntry(ThreadID tid)
+	{
+		this->maxEntries[tid]--;
+	}
+
+	void squashBQ(InstSeqNum seq_num, ThreadID tid);
 
     /** Returns the number of entries being used by a specific thread. */
     unsigned getThreadEntries(ThreadID tid)
@@ -283,6 +299,12 @@ class ROB
 
     /** Number of instructions in the ROB. */
     unsigned numEntries;
+	//
+	// If bundle commit is used
+	bool isBCUsed;
+	//
+	// Last Writer Module
+	LWModule *lwModule;
 
     /** Entries Per Thread */
     unsigned threadEntries[Impl::MaxThreads];

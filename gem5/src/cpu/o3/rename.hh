@@ -53,6 +53,7 @@
 #include "cpu/timebuf.hh"
 #include "sim/probe/probe.hh"
 
+#include "cpu/o3/last_writer_module.hh"
 struct DerivO3CPUParams;
 
 /**
@@ -141,6 +142,9 @@ class DefaultRename
 
     /** Returns the name of rename. */
     std::string name() const;
+
+	// Set pointer to lwmodule 
+	void setLWModule(LWModule *_lwModule);
 
     /** Registers statistics. */
     void regStats();
@@ -490,6 +494,12 @@ class DefaultRename
 
 	/* Flag for MOV elimination technique */
 	bool isMovEliUsed;
+
+	// If bundle commit is used
+	bool isBCUsed;
+
+	// Last Writer Module
+	LWModule *lwModule;
 
     /** Commit width, in instructions.  Used so rename knows how many
      *  instructions might have freed registers in the previous cycle.

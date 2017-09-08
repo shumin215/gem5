@@ -48,6 +48,7 @@
 #include "base/statistics.hh"
 #include "cpu/timebuf.hh"
 
+#include "cpu/o3/last_writer_module.hh"
 struct DerivO3CPUParams;
 
 /**
@@ -106,6 +107,9 @@ class DefaultDecode
 
     /** Returns the name of decode. */
     std::string name() const;
+
+	// Set pointer to lwmodule 
+	void setLWModule(LWModule *_lwModule);
 
     /** Registers statistics. */
     void regStats();
@@ -196,6 +200,8 @@ class DefaultDecode
      */
     void squash(DynInstPtr &inst, ThreadID tid);
 
+	void squashBQ(InstSeqNum seq_num, ThreadID tid);
+
   public:
     /** Squashes due to commit signalling a squash. Changes status to
      * squashing and clears block/unblock signals as needed.
@@ -268,6 +274,12 @@ class DefaultDecode
 
     /** The width of decode, in instructions. */
     unsigned decodeWidth;
+
+	// If bundle commit is used
+	bool isBCUsed;
+
+	// Last Writer Module
+	LWModule *lwModule;
 
     /** Index of instructions being sent to rename. */
     unsigned toRenameIndex;

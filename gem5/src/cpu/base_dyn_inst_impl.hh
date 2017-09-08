@@ -108,6 +108,13 @@ BaseDynInst<Impl>::initVars()
 	/* This is for checking if the instruction is counted for committed instruction */
 	isCountedForStats = false;
 
+/***********************************************************************
+ *  	Bundle Commit
+ * ******************************************************************/
+
+	bundle_info = NULL;
+	isLW = true;
+
     lqIdx = -1;
     sqIdx = -1;
 

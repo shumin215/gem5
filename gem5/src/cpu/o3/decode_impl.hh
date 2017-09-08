@@ -66,6 +66,7 @@ DefaultDecode<Impl>::DefaultDecode(O3CPU *_cpu, DerivO3CPUParams *params)
       commitToDecodeDelay(params->commitToDecodeDelay),
       fetchToDecodeDelay(params->fetchToDecodeDelay),
       decodeWidth(params->decodeWidth),
+	  isBCUsed(params->isBundleCommitUsed),
       numThreads(params->numThreads)
 {
     if (decodeWidth > Impl::MaxWidth)
@@ -103,6 +104,12 @@ std::string
 DefaultDecode<Impl>::name() const
 {
     return cpu->name() + ".decode";
+}
+
+template <typename Impl>
+void DefaultDecode<Impl>::setLWModule(LWModule *_lwModule)
+{
+	lwModule = _lwModule;
 }
 
 template <class Impl>
@@ -307,7 +314,24 @@ DefaultDecode<Impl>::squash(DynInstPtr &inst, ThreadID tid)
     }
 
     InstSeqNum squash_seq_num = inst->seqNum;
+/***********************************************************************
+ *  	Bundle Commit
+ *
+ *  	Flush bundle info on Bundle Queue 
+ *  	until branch seqNum < start inst seqNum | BQ size == 0
+ * ******************************************************************/
 
+	if(isBCUsed == true)
+	{
+
+	// TODO: Flush bundle info on BQ 
+	// while(branch seqNum < start inst seqNum || BQ.size() == 0)
+	// First, access BQ back
+	squashBQ(squash_seq_num, tid);
+
+	}
+
+/**********************************************************************/
     // Might have to tell fetch to unblock.
     if (decodeStatus[tid] == Blocked ||
         decodeStatus[tid] == Unblocking) {
@@ -754,6 +778,10 @@ DefaultDecode<Impl>::decodeInsts(ThreadID tid)
     if (toRenameIndex) {
         wroteToTimeBuffer = true;
     }
+}
+template <typename Impl>
+void DefaultDecode<Impl>::squashBQ(InstSeqNum squash_seq, ThreadID tid)
+{
 }
 
 #endif//__CPU_O3_DECODE_IMPL_HH__

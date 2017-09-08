@@ -57,6 +57,7 @@ template <class Impl>
 ROB<Impl>::ROB(O3CPU *_cpu, DerivO3CPUParams *params)
     : cpu(_cpu),
       numEntries(params->numROBEntries),
+	  isBCUsed(params->isBundleCommitUsed),
       squashWidth(params->squashWidth),
       numInstsInROB(0),
       numThreads(params->numThreads)
@@ -129,6 +130,12 @@ std::string
 ROB<Impl>::name() const
 {
     return cpu->name() + ".rob";
+}
+
+template <typename Impl>
+void ROB<Impl>::setLWModule(LWModule *_lwModule)
+{
+	lwModule = _lwModule;
 }
 
 template <class Impl>
@@ -262,6 +269,21 @@ ROB<Impl>::retireHead(ThreadID tid)
     DPRINTF(ROB, "[tid:%u]: Retiring head instruction, "
             "instruction PC %s, [sn:%lli]\n", tid, head_inst->pcState(),
             head_inst->seqNum);
+/***********************************************************************
+ *  	Bundle Commit
+ *
+ *  	Decrement ROB entry size, when non-last writer is retired from ROB
+ *  	on instruction is bundle mode
+ * ******************************************************************/
+
+	if(head_inst->bundle_info != NULL && head_inst->isLW == false)
+	{
+		decrementROBMaxEntry(tid);
+		DPRINTF(ROB, "***ROB MaxEntry:%d, Free Entry:%d, [sn:%i]\n",
+			getMaxEntries(tid), numFreeEntries(), head_inst->seqNum);
+	}
+
+/**********************************************************************/
 
     --numInstsInROB;
     --threadEntries[tid];
@@ -334,7 +356,24 @@ ROB<Impl>::doSquash(ThreadID tid)
             tid, squashedSeqNum[tid]);
 
     assert(squashIt[tid] != instList[tid].end());
+/***********************************************************************
+ *  	Bundle Commit
+ *
+ *  	Flush bundle info on Bundle Queue 
+ *  	until branch seqNum < start inst seqNum | BQ size == 0
+ * ******************************************************************/
 
+	if(isBCUsed == true)
+	{
+
+	// TODO: Flush bundle info on BQ 
+	// while(branch seqNum < start inst seqNum || BQ.size() == 0)
+	// First, access BQ back
+	squashBQ(squashedSeqNum[tid], tid);
+
+	}
+
+/**********************************************************************/
     if ((*squashIt[tid])->seqNum < squashedSeqNum[tid]) {
         DPRINTF(ROB, "[tid:%u]: Done squashing instructions.\n",
                 tid);
@@ -561,6 +600,11 @@ ROB<Impl>::findInst(ThreadID tid, InstSeqNum squash_inst)
         }
     }
     return NULL;
+}
+
+template <typename Impl>
+void ROB<Impl>::squashBQ(InstSeqNum squash_seq, ThreadID tid)
+{
 }
 
 #endif//__CPU_O3_ROB_IMPL_HH__

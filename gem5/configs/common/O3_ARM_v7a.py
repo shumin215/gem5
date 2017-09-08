@@ -147,7 +147,7 @@ class O3_ARM_v7a_3(DerivO3CPU):
     numPhysFloatRegs = 192
     numIQEntries = 64
     numROBEntries = 128
-    isBundleCommitUsed = False
+    isBundleCommitUsed = True
     bundleLimit = 128 
     historyTableEntries = 79
     bundleBufferEntries = 16 
