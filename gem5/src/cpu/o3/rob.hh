@@ -186,15 +186,19 @@ class ROB
 
 	void incrementROBMaxEntry(ThreadID tid)
 	{
-		this->maxEntries[tid]++;
+//		this->maxEntries[tid]++;
+		this->numEntries++;
 	}
 
 	void decrementROBMaxEntry(ThreadID tid)
 	{
-		this->maxEntries[tid]--;
+//		this->maxEntries[tid]--;
+		this->numEntries--;
 	}
 
 	void squashBQ(InstSeqNum seq_num, ThreadID tid);
+
+	bool isSquashDetectedOnce(InstSeqNum seq_num, ThreadID tid);
 
     /** Returns the number of entries being used by a specific thread. */
     unsigned getThreadEntries(ThreadID tid)
@@ -349,6 +353,9 @@ class ROB
   private:
     /** The sequence number of the squashed instruction. */
     InstSeqNum squashedSeqNum[Impl::MaxThreads];
+
+	// Squash seq number history 
+	InstSeqNum prev_squashed_seq_num[Impl::MaxThreads];
 
     /** Is the ROB done squashing. */
     bool doneSquashing[Impl::MaxThreads];

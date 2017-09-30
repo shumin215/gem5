@@ -292,8 +292,31 @@ DefaultCommit<Impl>::regStats()
 
     commitEligibleSamples
         .name(name() + ".bw_lim_events")
-        .desc("number cycles where commit BW limit reached")
-        ;
+        .desc("number cycles where commit BW limit reached") ;
+
+    numOfNonLastWriter
+        .name(name() + ".numOfNonLastWriter")
+        .desc("number of non-last writer") ;
+
+    numOfLastWriter
+        .name(name() + ".numOfLastWriter")
+        .desc("number of last writer") ;
+
+    numOfBHTUpdateInCommit
+        .name(name() + ".numOfBHTUpdateInCommit")
+        .desc("number of update count for BHT in commit stage") ;
+
+    numOfBQReadInCommit
+        .name(name() + ".numOfBQReadInCommit")
+        .desc("number of read count for BQ in commit stage") ;
+
+    numOfBQUpdateInCommit
+        .name(name() + ".numOfBQUpdateInCommit")
+        .desc("number of update count for BQ in commit stage") ;
+
+    committedBundleCount
+        .name(name() + ".committedBundleCount")
+        .desc("number of committed bundles") ;
 }
 
 template <class Impl>
@@ -397,6 +420,9 @@ DefaultCommit<Impl>::startupStage()
 
 	isStartInBundle = true;
 	BHT_idx = -1;
+
+	deadlock_count = 0;
+	prev_seq = 0;
 }
 
 template <class Impl>
@@ -549,6 +575,14 @@ DefaultCommit<Impl>::generateTrapEvent(ThreadID tid, Fault inst_fault)
     cpu->schedule(trap, cpu->clockEdge(latency));
     trapInFlight[tid] = true;
     thread[tid]->trapPending = true;
+
+	if(isBCUsed == true)
+	{
+		if(BHT_idx != -1)
+		{
+			initializeAnalysis();
+		}
+	}
 }
 
 template <class Impl>
@@ -595,6 +629,14 @@ DefaultCommit<Impl>::squashAll(ThreadID tid)
     toIEW->commitInfo[tid].squashInst = NULL;
 
     toIEW->commitInfo[tid].pc = pc[tid];
+
+	if(isBCUsed == true)
+	{
+		if(BHT_idx != -1)
+		{
+			initializeAnalysis();
+		}
+	}
 }
 
 template <class Impl>
@@ -660,6 +702,11 @@ DefaultCommit<Impl>::squashAfter(ThreadID tid, DynInstPtr &head_inst)
     assert(!squashAfterInst[tid] || squashAfterInst[tid] == head_inst);
     commitStatus[tid] = SquashAfterPending;
     squashAfterInst[tid] = head_inst;
+
+	if(isBCUsed == true)
+	{
+		squashBQ(head_inst->seqNum, tid);
+	}
 }
 
 template <class Impl>
@@ -873,6 +920,16 @@ DefaultCommit<Impl>::commit()
                 DPRINTF(Commit,
                     "[tid:%i]: Squashing due to order violation [sn:%i]\n",
                     tid, fromIEW->squashedSeqNum[tid]);
+
+//			if(isBCUsed == true)
+//			{
+//				// If this isntruction is not start in bundle
+//				if(isNotBundleStart(fromIEW->squashedSeqNum[tid]))
+//				{
+//					setEndSeqForViolation(fromIEW->squashedSeqNum[tid] - 1);
+//				}
+//			}
+
             }
 
             DPRINTF(Commit, "[tid:%i]: Redirecting to PC %#x\n",
@@ -994,6 +1051,8 @@ DefaultCommit<Impl>::commitInsts()
 
     DynInstPtr head_inst;
 
+
+
     // Commit as many instructions as possible until the commit bandwidth
     // limit is reached, or it becomes impossible to commit any more.
     while (num_committed < commitWidth) {
@@ -1013,8 +1072,10 @@ DefaultCommit<Impl>::commitInsts()
 
         assert(tid == commit_thread);
 
-        DPRINTF(Commit, "Trying to commit head instruction, [sn:%i] [tid:%i]\n",
+        DPRINTF(Commit, "Trying to commit head instruction, [sn:%i][tid:%i]\n",
                 head_inst->seqNum, tid);
+
+
 
         // If the head instruction is squashed, it is ready to retire
         // (be removed from the ROB) at any time.
@@ -1031,6 +1092,43 @@ DefaultCommit<Impl>::commitInsts()
             // Record that the number of ROB entries has changed.
             changedROBNumEntries[tid] = true;
         } else {
+		// This is for solving deadlock, I don't know why it is emerged
+		if(isBCUsed == true)
+		{
+			if(head_inst->bundle_info != NULL &&
+					lwModule->bundleQueue.size() != 0 &&
+					lwModule->bundleQueue.front()->exception == false &&
+					prev_seq == head_inst->seqNum)
+			{
+				deadlock_count++;
+			}
+			else if(prev_seq != head_inst->seqNum)
+			{
+				deadlock_count = 0;
+			}
+
+			prev_seq = head_inst->seqNum;
+
+			if(deadlock_count >= 100)
+			{
+				setExceptionInBQ(head_inst);
+				deadlock_count = 0;
+			}
+		}
+
+/*******************************************************************
+*TODO: analysis instruction or instructions that can be committed as bundle
+*  	only
+*******************************************************************/
+
+
+		if(isBCUsed == false 
+				|| head_inst->bundle_info == NULL
+				|| (head_inst->bundle_info != NULL && isExceptionSet(head_inst))
+				|| (head_inst->bundle_info != NULL && canBundleCommit(head_inst))
+				)
+		{
+/*******************************************************************/
             pc[tid] = head_inst->pcState();
 
             // Increment the total number of non-speculative instructions
@@ -1135,7 +1233,21 @@ DefaultCommit<Impl>::commitInsts()
                         head_inst->pcState(), tid ,head_inst->seqNum);
                 break;
             }
+
+		}
+		else
+		{
+			break;
+		}
+
         }
+
+//		} // isBCUsed
+//		else
+//		{
+//			DPRINTF(Commit, "[BC] \n");
+//			break;
+//		}
     }
 
     DPRINTF(CommitRate, "%i\n", num_committed);
@@ -1219,11 +1331,21 @@ DefaultCommit<Impl>::commitHead(DynInstPtr &head_inst, unsigned inst_num)
 	// This instruction is for bundle commit 
 	if(head_inst->bundle_info != NULL)
 	{
+
 		//TODO: If end instruction in bundle, 
 		if(isEndInBundle(head_inst))
 		{
+			committedBundleCount++;
+
 			//TODO: pop bundle info from Bundle Queue
 			popBundleInfo(head_inst);
+
+			// if there was interrupt, building bundle will resume
+			if(BHT_idx != -1)
+			{
+				initializeAnalysis();
+			}
+
 		}
 	}
 	// Analysis
@@ -1241,14 +1363,20 @@ DefaultCommit<Impl>::commitHead(DynInstPtr &head_inst, unsigned inst_num)
 			lwModule->clearBHTEntry(BHT_idx);
 			// Set inst seq num to BHT
 			lwModule->setStartPCToBHT(BHT_idx, head_inst->instAddr());
+			lwModule->setStartMicroPCToBHT(BHT_idx, (uint8_t)head_inst->microPC());
 //			// Increase size in BHT
 //			lwModule->incrementSizeToBHT(BHT_idx);
+			DPRINTF(Commit, "[BC] bundle analysis gets started BHT[%d][sn:%i]\n",
+					BHT_idx, head_inst->seqNum);
 		}
 		
 		// Set bundle information in LWIT
 		setBundleInfoTOBHT(head_inst, BHT_idx);
 		// Increase size in BHT
 		lwModule->incrementSizeToBHT(BHT_idx);
+
+		DPRINTF(Commit, "[BC] bundle size: %d increment BHT[%d][sn:%i]\n",
+				lwModule->bundleHistoryTable[BHT_idx].size, BHT_idx, head_inst->seqNum);
 
 		// End instruction in bundle
 		if(head_inst->isControl()
@@ -1261,8 +1389,15 @@ DefaultCommit<Impl>::commitHead(DynInstPtr &head_inst, unsigned inst_num)
 			assert(BHT_idx != -1);
 			// Set end instruction pc
 			lwModule->setEndPCToBHT(BHT_idx, head_inst->instAddr());
+			lwModule->setEndMicroPCToBHT(BHT_idx, (uint8_t)head_inst->microPC());
 			// set valid to BHT
 			lwModule->setValidToBHT(BHT_idx);
+
+			DPRINTF(Commit, "[BC] bundle construction is complete, size: %d BHT[%d][sn:%i]\n",
+				lwModule->bundleHistoryTable[BHT_idx].size, BHT_idx, head_inst->seqNum);
+
+			// for stats
+			numOfBHTUpdateInCommit++;
 
 			// Reset BHT index
 			BHT_idx = -1;
@@ -1322,7 +1457,20 @@ DefaultCommit<Impl>::commitHead(DynInstPtr &head_inst, unsigned inst_num)
             delete head_inst->traceData;
             head_inst->traceData = NULL;
         }
+/***********************************************************************
+ *  	Bundle Commit
+ *
+ *  	Pop bundle info from Bundle Queue due to system call
+ * ******************************************************************/
+		//TODO: 
+		if(isBCUsed == true)
+		{
 
+		squashBQ(head_inst->seqNum, tid);
+
+		}
+
+/* ******************************************************************/
         // Generate trap squash event.
         generateTrapEvent(tid, inst_fault);
         return false;
@@ -1436,7 +1584,23 @@ DefaultCommit<Impl>::getInsts()
 			// If instruction is last writer
 			else
 			{
+				DPRINTF(Commit, "*** Last Writer [sn:%i]\n", inst->seqNum);
 				numOfLastWriter++;
+			}
+
+			// TODO: If dispatched instruction is end inst to ROB 
+			if(isEndInBundle(inst))
+			{
+				// This is for popping bundle info 
+				// when all the instruction are committed
+				setEndSeqNumToBQ(inst);
+				DPRINTF(Commit, "[BC] this instruction is end of bundle[sn:%i]\n",
+						inst->seqNum);
+				if(isExceptionSet(inst))
+				{
+					DPRINTF(Commit, "[BC] this instruction is exception [sn:%i]\n",
+							inst->seqNum);
+				}
 			}
 		}
 
@@ -1488,10 +1652,13 @@ DefaultCommit<Impl>::markCompletedInsts()
 
 			DynInstPtr inst = fromIEW->insts[inst_num];
 
-			// If instruction is bundle mode
-			if(inst->bundle_info != NULL)
+			// If instruction is in bundle mode
+			if(inst->bundle_info != NULL &&
+//					itsBundleIsInBQ(inst) &&
+					searchItsBundleInBQ(inst))
 			{
-				DPRINTF(Commit, "** Increment count in bundle info [Bundle Mode][sn:%i]\n",
+				assert(lwModule->bundleQueue.size() != 0);
+				DPRINTF(Commit, "** Increment count in bundle [Bundle Mode][sn:%i]\n",
 						inst->seqNum);
 				incrementCount(inst);
 
@@ -1665,25 +1832,36 @@ DefaultCommit<Impl>::oldestReady()
 template<typename Impl>
 void DefaultCommit<Impl>::incrementCount(DynInstPtr &inst)
 {
-	LWModule::BundleQueueEntry &bundle_info = *(inst->bundle_info);
+	LWModule::BundleQueueEntry *bundle_info = inst->bundle_info;
 
-	lwModule->incrementCountToBQ(bundle_info);
+	DPRINTF(Commit, "** BundleCount:%d, BundleSize:%d [sn:%i]\n",
+			bundle_info->count, bundle_info->size, inst->seqNum);
+
+	assert(bundle_info->size != 0);
+
+	lwModule->incrementCountToBQ(*bundle_info);
 	DPRINTF(Commit, "** BundleCount:%d [sn:%i]\n",
-			bundle_info.count, inst->seqNum);
+			bundle_info->count, inst->seqNum);
+
+	numOfBQUpdateInCommit++;
 }
 
 template <typename Impl>
 void DefaultCommit<Impl>::checkCanBundleCommit(DynInstPtr &inst)
 {
-	LWModule::BundleQueueEntry &bundle_info = *(inst->bundle_info);
+	LWModule::BundleQueueEntry *bundle_info = inst->bundle_info;
 
 	DPRINTF(Commit, "** BundleCount:%d, BundleSize:%d [sn:%i]\n",
-			bundle_info.count, bundle_info.size, inst->seqNum);
-	if(bundle_info.count == bundle_info.size)
+			bundle_info->count, bundle_info->size, inst->seqNum);
+	assert(bundle_info->size != 0);
+
+	if(bundle_info->count == bundle_info->size)
 	{
 		DPRINTF(Commit, "** This bundle can be committed\n");
-		lwModule->setBundleCommitToBQ(bundle_info);
+		lwModule->setBundleCommitToBQ(*bundle_info);
 	}
+
+	numOfBQReadInCommit++;
 }
 
 template <typename Impl>
@@ -1702,30 +1880,273 @@ void DefaultCommit<Impl>::setBundleInfoTOBHT(DynInstPtr &inst, unsigned BHT_idx)
 		// Set relative index 
 		lwModule->setLWRelIdx(BHT_idx, dest_reg, rel_idx);
 	}
+
+	numOfBHTUpdateInCommit++;
 }
 
 // TODO: If this instruction is last writer when instruction is bundle mode
- 
 template <typename Impl>
 bool DefaultCommit<Impl>::isLastWriter(DynInstPtr &inst)
 {
-	bool result = false;
+	bool result = true;
+	unsigned num_dest_arch_reg = inst->numDestRegs();
 	assert(inst->bundle_info != NULL);
+
+	LWModule::BundleQueueEntry *bundle_info = inst->bundle_info;
+
+	DPRINTF(Commit, "[BC] bundle size: %d, bundle start seq: %d [sn:%i]\n",
+			bundle_info->size, bundle_info->start_seq, inst->seqNum);
+
+	for(int idx = 0; idx < num_dest_arch_reg; idx++)
+	{
+		RegIndex dest_reg = inst->destRegIdx(idx);
+		unsigned rel_idx = inst->seqNum - bundle_info->start_seq;
+
+		DPRINTF(Commit, "[BC] dest_reg: %d, rel_idx: %d [sn:%i]\n", 
+				dest_reg, rel_idx, inst->seqNum);
+		if(bundle_info->lwit[dest_reg].flag == true &&
+				bundle_info->lwit[dest_reg].rel_idx == rel_idx)
+		{
+			DPRINTF(Commit, "** Last writer is detected [sn:%i]\n"
+					,inst->seqNum);
+		}
+		else
+		{
+			result = false;
+			break;
+		}
+	}
+
+	numOfBQReadInCommit++;
 
 	return result;
 }
 
+// TODO: count dispatched instruction and compare to bundle size
 template <typename Impl>
 bool DefaultCommit<Impl>::isEndInBundle(DynInstPtr &inst)
 {
 	bool result = false;
+	LWModule::BundleQueueEntry &bundle_info = *(inst->bundle_info);
+	unsigned difference = inst->seqNum - bundle_info.start_seq + 1; 
+
+	if(bundle_info.end_pc == inst->instAddr() &&
+			bundle_info.end_micro_pc == inst->microPC())
+	{
+		if(difference != bundle_info.size)
+		{
+			assert(difference == bundle_info.size);
+		}
+
+		result = true;
+	}
+
+	numOfBQReadInCommit++;
+
+	return result;
+}
+
+// @TODO: pop bundle info from the BQ
+template <typename Impl>
+void DefaultCommit<Impl>::popBundleInfo(DynInstPtr &inst)
+{
+	// Make sure that the bundle info including 
+	// this instruction must be in front of BQ
+	LWModule::BundleQueueEntry *bundle_info = lwModule->bundleQueue.front();
+
+	while(lwModule->bundleQueue.size() != 0 &&
+		bundle_info->start_seq < inst->seqNum)
+	{
+		DPRINTF(Commit, "[BC] BQ size:%d, bundle size:%d, bundle count:%d [start_seq:%d][sn:%i]\n",
+				lwModule->bundleQueue.size(), bundle_info->size, bundle_info->count,
+				bundle_info->start_seq, inst->seqNum);
+		// BQ must not be empty
+		assert(lwModule->bundleQueue.size() != 0);
+		// BQ count equals BQ size
+		assert(bundle_info->exception == true ||
+				bundle_info->count == bundle_info->size);
+		// BQ is ready to bundle commit 
+		assert(bundle_info->exception == true || 
+				bundle_info->bundle_commit == true);
+
+		delete []bundle_info->lwit;
+
+		delete bundle_info;
+
+		// Pop bundle from the BQ
+		lwModule->bundleQueue.pop_front();
+
+		DPRINTF(Commit, "[BC] BQ is popped BQ size:%d\n",
+				lwModule->bundleQueue.size());
+
+		bundle_info = lwModule->bundleQueue.front();
+
+		numOfBQUpdateInCommit++;
+	}
+}
+
+template <typename Impl>
+void DefaultCommit<Impl>::setEndSeqNumToBQ(DynInstPtr &inst)
+{
+	LWModule::BundleQueueEntry &bundle_info = *(inst->bundle_info);
+
+	lwModule->setEndSeqToBQ(bundle_info, inst->seqNum);
+
+	numOfBQUpdateInCommit++;
+}
+
+template <typename Impl>
+void DefaultCommit<Impl>::squashBQ(InstSeqNum squash_seq, ThreadID tid)
+{
+	if(lwModule->bundleQueue.size() == 0)
+	{
+		return;
+	}
+
+	numOfBQUpdateInCommit++;
+
+	LWModule::BundleQueueEntry *bundle_info = lwModule->bundleQueue.back();
+
+	DPRINTF(Commit, "[BC] BQ size:%d start_seq:%d [sn:%i]\n",
+			lwModule->bundleQueue.size(), bundle_info->start_seq, squash_seq);
+
+	while(lwModule->bundleQueue.size() != 0 &&
+		bundle_info->start_seq > squash_seq)
+	{
+		DPRINTF(Commit, "[BQ] BQ is squashed [start_sn:%d]\n", bundle_info->start_seq);
+
+		delete []bundle_info->lwit;
+
+		delete bundle_info;
+
+		lwModule->bundleQueue.pop_back();
+
+		if(lwModule->bundleQueue.size() == 0)
+			break;
+		
+		bundle_info = lwModule->bundleQueue.back();
+	}
+}
+
+template <typename Impl>
+bool DefaultCommit<Impl>::itsBundleIsInBQ(DynInstPtr &inst)
+{
+	assert(inst->bundle_info != NULL);
+	bool result = false;
+
+	if(lwModule->bundleQueue.size() == 0)
+	{
+		return result;
+	}
+
+	LWModule::BundleQueueEntry *bundle_info = inst->bundle_info;
+
+	int diff = inst->seqNum - bundle_info->start_seq + 1;
+
+	if(diff <= bundle_info->size && bundle_info->size != 0)
+	{
+		result = true;
+	}
+	else
+	{
+		DPRINTF(Commit, "[BC] there is no bundle [bundle size:%d][start_seq:%d][sn:%i]\n",
+				bundle_info->size, bundle_info->start_seq, inst->seqNum);
+	}
 
 	return result;
 }
 
 template <typename Impl>
-void DefaultCommit<Impl>::popBundleInfo(DynInstPtr &inst)
+bool DefaultCommit<Impl>::canBundleCommit(DynInstPtr &inst)
 {
+	bool result = false;
+
+	LWModule::BundleQueueEntry *bundle_info = inst->bundle_info;
+
+	if(bundle_info->bundle_commit == true)
+	{
+		assert(lwModule->bundleQueue.size() != 0);
+
+		assert(bundle_info->size == bundle_info->count);
+
+		result = true;
+	}
+
+	numOfBQReadInCommit++;
+
+	return result;
+}
+
+template <typename Impl>
+bool DefaultCommit<Impl>::isExceptionSet(DynInstPtr &inst)
+{
+	bool result = false;
+
+	LWModule::BundleQueueEntry *bundle_info = inst->bundle_info;
+
+	if(bundle_info->exception == true)
+	{
+		DPRINTF(Commit, "[BC] this bundle is on exception [start_seq:%i][sn:%i]\n",
+				bundle_info->start_seq, inst->seqNum);
+		result = true;
+	}
+	else
+	{
+		DPRINTF(Commit, "[BC] this bundle is Not on exception [start_seq:%i][sn:%i]\n",
+				bundle_info->start_seq, inst->seqNum);
+	}
+
+	numOfBQReadInCommit++;
+
+	return result;
+}
+
+template <typename Impl>
+void DefaultCommit<Impl>::initializeAnalysis(void)
+{
+	lwModule->clearBHTEntry(BHT_idx);
+	isStartInBundle = true;
+	BHT_idx = -1;
+
+	numOfBHTUpdateInCommit++;
+}
+
+template <typename Impl>
+bool DefaultCommit<Impl>::searchItsBundleInBQ(DynInstPtr &inst)
+{
+	bool result = false;
+	unsigned size = lwModule->bundleQueue.size();
+
+	for(int i=0; i<size; i++)
+	{
+		LWModule::BundleQueueEntry *bundle_info = lwModule->bundleQueue[i];
+
+		numOfBQReadInCommit++;
+
+		assert(bundle_info->size != 0);
+
+		if(inst->seqNum >= bundle_info->start_seq &&
+				inst->seqNum <= (bundle_info->start_seq + bundle_info->size - 1))
+		{
+			result = true;
+			break;
+		}
+	}
+
+	return result;
+}
+
+template <typename Impl>
+void DefaultCommit<Impl>::setExceptionInBQ(DynInstPtr &inst)
+{
+	LWModule::BundleQueueEntry *bundle_info = inst->bundle_info;
+
+	DPRINTF(Commit, "[BC] Exception flag sets [size:%d][start_seq:%i][sn:%i]\n",
+		bundle_info->size, bundle_info->start_seq, inst->seqNum);
+
+	lwModule->setExceptionToBQ(*bundle_info);
+
+	numOfBQUpdateInCommit++;
 }
 
 #endif//__CPU_O3_COMMIT_IMPL_HH__

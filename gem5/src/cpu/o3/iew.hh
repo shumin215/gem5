@@ -377,6 +377,12 @@ class DefaultIEW
 	/* Set Phys Dest Reg Ready, because commit width can block IXU instructions */
 	void setDestRegReady(DynInstPtr &inst, ThreadID tid);
 
+	void setExceptionInBQ(DynInstPtr &inst);
+
+	bool isBundleStart(DynInstPtr &inst);
+
+	void setEndSeqForViolation(DynInstPtr &inst);
+
     /** Pointer to main time buffer used for backwards communication. */
     TimeBuffer<TimeStruct> *timeBuffer;
 

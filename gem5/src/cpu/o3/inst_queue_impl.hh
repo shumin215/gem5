@@ -388,6 +388,8 @@ InstructionQueue<Impl>::resetState()
         instList[tid].clear();
     }
 
+	DPRINTF(IQ, "[BC] IQ is reset\n");
+
     // Initialize the number of free IQ entries.
     freeEntries = numEntries;
 
@@ -938,6 +940,10 @@ InstructionQueue<Impl>::commit(const InstSeqNum &inst, ThreadID tid)
     while (iq_it != instList[tid].end() &&
            (*iq_it)->seqNum <= inst) {
         ++iq_it;
+		DynInstPtr inst = instList[tid].front();
+		DPRINTF(IQ, "[BC] Debug: instList size: %d [sn:%i]\n", 
+				instList[tid].size(), inst->seqNum);
+
         instList[tid].pop_front();
     }
 
@@ -1203,6 +1209,12 @@ InstructionQueue<Impl>::doSquash(ThreadID tid)
             DPRINTF(IQ, "[tid:%i]: Instruction [sn:%lli] PC %s squashed.\n",
                     tid, squashed_inst->seqNum, squashed_inst->pcState());
 
+			if(squashed_inst->isExecInIXU == true)
+			{
+				DPRINTF(IQ, "[PIXU] instruction is squashed [sn:%i]\n",
+						squashed_inst->seqNum);
+			}
+
             bool is_acq_rel = squashed_inst->isMemBarrier() &&
                          (squashed_inst->isLoad() ||
                            (squashed_inst->isStore() &&
@@ -1284,10 +1296,13 @@ InstructionQueue<Impl>::doSquash(ThreadID tid)
             squashed_inst->setCanCommit();
             squashed_inst->clearInIQ();
 
-            //Update Thread IQ Count
-            count[squashed_inst->threadNumber]--;
+			if(squashed_inst->isExecInIXU != true)
+			{
+				//Update Thread IQ Count
+				count[squashed_inst->threadNumber]--;
 
-            ++freeEntries;
+				++freeEntries;
+			}
         }
 
         instList[tid].erase(squash_it--);

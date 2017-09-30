@@ -281,6 +281,14 @@ DefaultFetch<Impl>::regStats()
         .desc("Number of outstanding ITLB misses that were squashed")
         .prereq(fetchTlbSquashes);
 
+    numOfBHTRead
+        .name(name() + ".numOfBHTRead")
+        .desc("Number of read count for BHT in fetch stage");
+
+    numOfBQUpdate
+        .name(name() + ".numOfBQUpdate")
+        .desc("Number of update count for BQ in fetch stage");
+
     fetchNisnDist
         .init(/* base value */ 0,
               /* last value */ fetchWidth,
@@ -977,8 +985,16 @@ DefaultFetch<Impl>::tick()
 			if(isBCUsed == true)
 			{
 
+
+			// check If instruction is bundle mode or not by referring the BQ back
+			if(isPresentInBQ(inst))
+			{
+				inst->bundle_info = lwModule->bundleQueue.back();
+				DPRINTF(Fetch, "[BC] bundle info alreay is pushed to the BQ, [start seq:%i] "
+						"[sn:%i]\n", inst->bundle_info->start_seq, inst->seqNum);
+			}
 			// If instruction is for bundle commit
-			if(isPresentInBHT(inst))
+			else if(isPresentInBHT(inst))
 			{
 				DPRINTF(Fetch, "[BC] instruction can be committed as bundle unit [sn:%i]\n",
 						inst->seqNum);
@@ -1731,13 +1747,16 @@ bool DefaultFetch<Impl>::isPresentInBHT(DynInstPtr &inst)
 	{
 		assert(bundle_history.size != 0);
 
-		if(inst->instAddr() == bundle_history.start_pc)
+		if(inst->instAddr() == bundle_history.start_pc &&
+				inst->microPC() == bundle_history.start_micro_pc)
 		{
 			DPRINTF(Fetch, "** There is bundle history in BHT[%d] [sn:%i]\n",
 					BHT_idx, inst->seqNum);
 			result = true;
 		}
 	}
+
+	numOfBHTRead++;
 
 	return result;
 }
@@ -1749,6 +1768,8 @@ void DefaultFetch<Impl>::pushBundleInfoToBQ(DynInstPtr &inst)
 	LWModule::BundleHistoryEntry &bundle_history = 
 		lwModule->bundleHistoryTable[BHT_idx];
 
+	numOfBQUpdate++;
+
 	assert(bundle_history.valid == true);
 
 	if(lwModule->bundleQueue.size() >= BQ_Limit)
@@ -1758,24 +1779,66 @@ void DefaultFetch<Impl>::pushBundleInfoToBQ(DynInstPtr &inst)
 		return;
 	}
 
-	LWModule::BundleQueueEntry new_bundle_info;
+	assert(bundle_history.size != 0);
+
+	LWModule::BundleQueueEntry *new_bundle_info = new LWModule::BundleQueueEntry;
+
+
 
 	// Set infomation of the bundle 
-	lwModule->setSizeToBQ(new_bundle_info, bundle_history.size);
+	lwModule->setSizeToBQ(*new_bundle_info, bundle_history.size);
 
-	lwModule->setStartPCToBQ(new_bundle_info, inst->instAddr());
+	lwModule->setStartPCToBQ(*new_bundle_info, inst->instAddr());
 
-	lwModule->setStartSeqToBQ(new_bundle_info, inst->seqNum);
+	lwModule->setStartMicroPCToBQ(*new_bundle_info, (uint8_t)inst->microPC());
 
-	lwModule->setLWITTOBQ(new_bundle_info, bundle_history);
+	lwModule->setEndPCToBQ(*new_bundle_info, bundle_history.end_pc);
+
+	lwModule->setEndMicroPCToBQ(*new_bundle_info, bundle_history.end_micro_pc);
+
+	lwModule->setStartSeqToBQ(*new_bundle_info, inst->seqNum);
+
+	lwModule->setLWITToBQ(*new_bundle_info, bundle_history);
 
 	// Set pointer to bundle queue entry to instruction 
-	inst->bundle_info = &new_bundle_info;
+	inst->bundle_info = new_bundle_info;
 
-	DPRINTF(Fetch, "** Bundle is entered to Bundle Queue [sn:%i]\n",
-			inst->seqNum);
+	DPRINTF(Fetch, "** Bundle is entered to Bundle Queue, size:%d [sn:%i]\n",
+			bundle_history.size, inst->seqNum);
 	// Push bundle info to Bundle Queue
 	lwModule->bundleQueue.push_back(new_bundle_info);
+
+	DPRINTF(Fetch, "[BC] BQ size:%d \n", lwModule->bundleQueue.size());
+}
+
+template <typename Impl>
+bool DefaultFetch<Impl>::isPresentInBQ(DynInstPtr &inst)
+{
+	bool result = false;
+
+	// if there is no bundle queue entry
+	if(lwModule->bundleQueue.size() == 0)
+	{
+		return result;
+	}
+
+	LWModule::BundleQueueEntry *bundle_info = lwModule->bundleQueue.back();
+
+	DPRINTF(Fetch, "[BC] BQ size:%d \n", lwModule->bundleQueue.size());
+	DPRINTF(Fetch, "[BC] bundle size:%d [start_inst_pc:%#x][start_sn:%i][sn:%i]\n", 
+			bundle_info->size, bundle_info->start_pc,
+			 bundle_info->start_seq, inst->seqNum);
+
+	assert(bundle_info->size != 0);
+
+	unsigned difference = inst->seqNum - bundle_info->start_seq;
+
+	if(difference < bundle_info->size)
+	{
+		result = true;
+	}
+
+	return result;
 }
 
 #endif//__CPU_O3_FETCH_IMPL_HH__

@@ -332,6 +332,22 @@ class DefaultCommit
 
 	void popBundleInfo(DynInstPtr &inst);
 
+	void setEndSeqNumToBQ(DynInstPtr &inst);
+
+	void squashBQ(InstSeqNum squash_seq, ThreadID tid);
+
+	bool itsBundleIsInBQ(DynInstPtr &inst);
+
+	bool canBundleCommit(DynInstPtr &inst);
+
+	bool isExceptionSet(DynInstPtr &inst);
+
+	void initializeAnalysis(void);
+
+	bool searchItsBundleInBQ(DynInstPtr &inst);
+
+	void setExceptionInBQ(DynInstPtr &inst);
+
     /** Gets the thread to commit, based on the SMT policy. */
     ThreadID getCommittingThread();
 
@@ -473,6 +489,11 @@ class DefaultCommit
     /** Number of Reorder Buffers */
     unsigned numRobs;
 
+	// For solving deadlock
+	unsigned deadlock_count;
+
+	InstSeqNum prev_seq;
+
     /** Number of Active Threads */
     const ThreadID numThreads;
 
@@ -576,6 +597,14 @@ class DefaultCommit
 	Stats::Scalar numOfNonLastWriter;
 	// Number of last Writer
 	Stats::Scalar numOfLastWriter;
+
+	Stats::Scalar numOfBHTUpdateInCommit;
+
+	Stats::Scalar numOfBQReadInCommit;
+
+	Stats::Scalar numOfBQUpdateInCommit;
+
+	Stats::Scalar committedBundleCount;
 };
 
 #endif // __CPU_O3_COMMIT_HH__

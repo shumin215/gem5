@@ -1209,6 +1209,15 @@ DefaultIEW<Impl>::dispatchInsts(ThreadID tid)
                 instQueue.insertNonSpec(inst);
                 add_to_iq = false;
 
+			if(isBCUsed == true)
+			{
+				// if instruction is bundle mode
+				if(inst->bundle_info != NULL)
+				{
+					setExceptionInBQ(inst);
+				}
+			}
+
                 ++iewDispNonSpecInsts;
             } else {
                 add_to_iq = true;
@@ -1220,6 +1229,16 @@ DefaultIEW<Impl>::dispatchInsts(ThreadID tid)
             inst->setCanCommit();
             instQueue.insertBarrier(inst);
             add_to_iq = false;
+
+			if(isBCUsed == true)
+			{
+				// if instruction is bundle mode
+				if(inst->bundle_info != NULL)
+				{
+					setExceptionInBQ(inst);
+				}
+			}
+
         } else if (inst->isNop()) {
             DPRINTF(IEW, "[tid:%i]: Issue: Nop instruction encountered, "
                     "skipping.\n", tid);
@@ -1247,6 +1266,15 @@ DefaultIEW<Impl>::dispatchInsts(ThreadID tid)
 
             // Specifically insert it as nonspeculative.
             instQueue.insertNonSpec(inst);
+
+			if(isBCUsed == true)
+			{
+				// if instruction is bundle mode
+				if(inst->bundle_info != NULL)
+				{
+					setExceptionInBQ(inst);
+				}
+			}
 
             ++iewDispNonSpecInsts;
 
@@ -1584,6 +1612,16 @@ DefaultIEW<Impl>::executeInsts()
                     inst->setExecuted();
                     instToCommit(inst);
                     activityThisCycle();
+
+			if(isBCUsed == true)
+			{
+				// if instruction is bundle mode
+				if(inst->bundle_info != NULL)
+				{
+//					setExceptionInBQ(inst);
+				}
+			}
+
                 }
 
                 // Store conditionals will mark themselves as
@@ -1660,6 +1698,20 @@ DefaultIEW<Impl>::executeInsts()
                         violator->pcState(), violator->seqNum,
                         inst->pcState(), inst->seqNum, inst->physEffAddrLow);
 
+			if(isBCUsed == true)
+			{
+				// if instruction is bundle mode
+				if(violator->bundle_info != NULL &&
+						!isBundleStart(violator))
+				{
+					// set exception flag in bundle for solving deadlock
+					setExceptionInBQ(violator);
+
+					// change end seq for free bundle from BQ
+					setEndSeqForViolation(violator);
+				}
+			}
+
                 fetchRedirect[tid] = true;
 
                 // Tell the instruction queue that a violation has occured.
@@ -1684,6 +1736,20 @@ DefaultIEW<Impl>::executeInsts()
                         inst->physEffAddrLow);
                 DPRINTF(IEW, "Violation will not be handled because "
                         "already squashing\n");
+
+			if(isBCUsed == true)
+			{
+				// if instruction is bundle mode
+				if(violator->bundle_info != NULL &&
+						isBundleStart(violator))
+				{
+					// set exception flag in bundle for solving deadlock
+					setExceptionInBQ(violator);
+
+					// change end seq for free bundle from BQ
+					setEndSeqForViolation(violator);
+				}
+			}
 
                 ++memOrderViolationEvents;
             }
@@ -2292,6 +2358,47 @@ void DefaultIEW<Impl>::setDestRegReady(DynInstPtr &inst, ThreadID tid)
 
 		writebackCount[tid]++;
 	}
+}
+
+template <typename Impl>
+void DefaultIEW<Impl>::setExceptionInBQ(DynInstPtr &inst)
+{
+	LWModule::BundleQueueEntry *bundle_info = inst->bundle_info;
+
+	DPRINTF(IEW, "[BC] Exception flag sets [size:%d][start_seq:%i][sn:%i]\n",
+		bundle_info->size, bundle_info->start_seq, inst->seqNum);
+
+	lwModule->setExceptionToBQ(*bundle_info);
+}
+
+template <typename Impl>
+bool DefaultIEW<Impl>::isBundleStart(DynInstPtr &inst)
+{
+	assert(inst->bundle_info != NULL);
+
+	bool result = false;
+	LWModule::BundleQueueEntry *bundle_info = inst->bundle_info;
+
+	if(bundle_info->start_seq == inst->seqNum)
+	{
+		result = true;
+	}
+
+	return result;
+}
+
+template <typename Impl>
+void DefaultIEW<Impl>::setEndSeqForViolation(DynInstPtr &inst)
+{
+	assert(inst->bundle_info != NULL);
+	LWModule::BundleQueueEntry *bundle_info = inst->bundle_info;
+
+	assert(bundle_info->exception == true);
+
+	DPRINTF(IEW, "[BC] Modifying end seq [sn:%i]->[sn:%i]\n",
+			bundle_info->end_seq, inst->seqNum);
+
+	lwModule->setEndSeqToBQ(*bundle_info, ((inst->seqNum)-1));
 }
 
 #endif//__CPU_O3_IEW_IMPL_IMPL_HH__

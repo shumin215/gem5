@@ -454,6 +454,9 @@ class FullO3CPU : public BaseO3CPU
     /** Sets the commit PC state of a specific thread. */
     void pcState(const TheISA::PCState &newPCState, ThreadID tid);
 
+	// Accelerate
+	void accelerate(ThreadID tid);
+
     /** Reads the commit PC state of a specific thread. */
     TheISA::PCState pcState(ThreadID tid);
 
@@ -563,6 +566,8 @@ class FullO3CPU : public BaseO3CPU
 
     /** Integer Register Scoreboard */
     Scoreboard scoreboard;
+
+	bool isBCUsed;
 
 	// Last Writer Module 
 	LWModule lwModule;
@@ -677,6 +682,8 @@ class FullO3CPU : public BaseO3CPU
 
     /** Mapping for system thread id to cpu id */
     std::map<ThreadID, unsigned> threadMap;
+
+	unsigned ran_counter;
 
     /** Available thread ids in the cpu*/
     std::vector<ThreadID> tids;

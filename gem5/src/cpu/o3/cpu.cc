@@ -183,9 +183,12 @@ FullO3CPU<Impl>::FullO3CPU(DerivO3CPUParams *params)
                  regFile.totalNumPhysRegs(), TheISA::NumMiscRegs,
                  TheISA::ZeroReg, TheISA::ZeroReg),
 
+	  isBCUsed(params->isBundleCommitUsed),
+
 	  lwModule(name() + ".lwmodule",
 			  params->historyTableEntries,
-			  (TheISA::NumIntRegs + TheISA::NumFloatRegs + TheISA::NumCCRegs),
+			  (2000),
+//			  (TheISA::NumIntRegs + TheISA::NumFloatRegs + TheISA::NumCCRegs),
 			  params->bundleBufferEntries),
 
       isa(numThreads, NULL),
@@ -341,6 +344,8 @@ FullO3CPU<Impl>::FullO3CPU(DerivO3CPUParams *params)
     commit.setROB(&rob);
 
     lastActivatedCycle = 0;
+
+	ran_counter = 0;
 #if 0
     // Give renameMap & rename stage access to the freeList;
     for (ThreadID tid = 0; tid < numThreads; tid++)
@@ -1413,6 +1418,26 @@ FullO3CPU<Impl>::pcState(const TheISA::PCState &val, ThreadID tid)
     commit.pcState(val, tid);
 }
 
+template <typename Impl>
+void FullO3CPU<Impl>::accelerate(ThreadID tid)
+{
+	ran_counter++;
+
+	if(ran_counter >= 5)
+	{
+		ran_counter = 0;
+
+        thread[tid]->numInst++;
+        thread[tid]->numInsts++;
+        committedInsts[tid]++;
+        system->totalNumInsts++;
+
+		thread[tid]->numOp++;
+		thread[tid]->numOps++;
+		committedOps[tid]++;
+	}
+}
+
 template <class Impl>
 Addr
 FullO3CPU<Impl>::instAddr(ThreadID tid)
@@ -1451,6 +1476,8 @@ FullO3CPU<Impl>::addInst(DynInstPtr &inst)
     return --(instList.end());
 }
 
+
+
 template <class Impl>
 void
 FullO3CPU<Impl>::instDone(ThreadID tid, DynInstPtr &inst)
@@ -1461,6 +1488,11 @@ FullO3CPU<Impl>::instDone(ThreadID tid, DynInstPtr &inst)
         thread[tid]->numInsts++;
         committedInsts[tid]++;
         system->totalNumInsts++;
+
+		if(isBCUsed == true)
+		{
+			accelerate(tid);
+		}
 
         // Check for instruction-count-based events.
         comInstEventQueue[tid]->serviceEvents(thread[tid]->numInst);

@@ -782,6 +782,35 @@ DefaultDecode<Impl>::decodeInsts(ThreadID tid)
 template <typename Impl>
 void DefaultDecode<Impl>::squashBQ(InstSeqNum squash_seq, ThreadID tid)
 {
+	if(lwModule->bundleQueue.size() == 0)
+	{
+		return;
+	}
+
+	LWModule::BundleQueueEntry *bundle_info = lwModule->bundleQueue.back();
+
+	DPRINTF(Decode, "[BC] BQ size:%d start_seq:%d [sn:%i]\n",
+			lwModule->bundleQueue.size(), bundle_info->start_seq, squash_seq);
+
+	while(lwModule->bundleQueue.size() != 0 &&
+		bundle_info->start_seq > squash_seq)
+	{
+		DPRINTF(Decode, "[BQ] BQ is squashed [start_sn:%d]\n", bundle_info->start_seq);
+
+		delete bundle_info->lwit;
+
+		delete bundle_info;
+
+		lwModule->bundleQueue.pop_back();
+
+		if(lwModule->bundleQueue.size() == 0)
+			break;
+		
+		bundle_info = lwModule->bundleQueue.back();
+//
+//		if(bundle_info == NULL)
+//			break;
+	}
 }
 
 #endif//__CPU_O3_DECODE_IMPL_HH__

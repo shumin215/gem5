@@ -10,22 +10,25 @@ LWModule::LWModule(const std::string &_my_name,
 	:name(_my_name), num_of_ht_entries(_num_of_ht_entries), 
 	num_of_arch_regs(_num_of_arch_regs), bundle_queue_limit(_bundle_queue_limit)
 {
-	bundleHistoryTable.resize(num_of_ht_entries);
+	bundleHistoryTable = new BundleHistoryEntry[num_of_ht_entries];
 
 	for(int i=0; i<num_of_ht_entries; i++)
 	{
-		bundleHistoryTable[i].lwit.resize(num_of_arch_regs);
+		bundleHistoryTable[i].lwit = new LWIT_Entry[num_of_arch_regs];
+//		bundleHistoryTable[i].lwit.resize(num_of_arch_regs);
 	}
 
-	bundleQueue.resize(bundle_queue_limit);
+//	bundleQueue.resize(bundle_queue_limit);
 }
 
 void LWModule::clearBHTEntry(unsigned idx)
 {
-	bundleHistoryTable[idx].valid = 0;
+	bundleHistoryTable[idx].valid = false;
 	bundleHistoryTable[idx].size = 0;
 	bundleHistoryTable[idx].start_pc = 0;
+	bundleHistoryTable[idx].start_micro_pc = 0;
 	bundleHistoryTable[idx].end_pc = 0;
+	bundleHistoryTable[idx].end_micro_pc = 0;
 
 	for(int i=0; i<num_of_arch_regs; i++)
 	{
@@ -44,9 +47,9 @@ void LWModule::setLWRelIdx(unsigned idx, RegIndex dest_reg_idx, unsigned _rel_id
 	bundleHistoryTable[idx].lwit[dest_reg_idx].rel_idx = _rel_idx;
 }
 
-void LWModule::setLWITTOBQ(BundleQueueEntry &bq_entry, BundleHistoryEntry &bundle_history)
+void LWModule::setLWITToBQ(BundleQueueEntry &bq_entry, BundleHistoryEntry &bundle_history)
 {
-	bq_entry.lwit.resize(num_of_arch_regs);
+	bq_entry.lwit = new LWIT_Entry[num_of_arch_regs];
 
 	for(int i=0; i<num_of_arch_regs; i++)
 	{

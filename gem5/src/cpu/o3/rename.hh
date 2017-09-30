@@ -590,6 +590,8 @@ class DefaultRename
     /** Number of instructions inserted into skid buffers. */
     Stats::Scalar renameSkidInsts;
 
+	Stats::Scalar numOfReadyInsts;
+
 	/* Number of MOV instructions */
 	Stats::Scalar numOfMOVInst;
 	/* Number of MOV instructions */

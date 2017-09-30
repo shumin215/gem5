@@ -1,3 +1,4 @@
+
 # Copyright (c) 2012 The Regents of The University of Michigan
 # All rights reserved.
 #
@@ -130,11 +131,11 @@ class O3_ARM_v7a_3(DerivO3CPU):
     issueToExecuteDelay = 1
     dispatchWidth = 3
     issueWidth = 8
-    wbWidth = 8
     isIXUUsed = True
     ixuWidth = 2
     ixuDepth = 2
-    isMovEliUsed = True
+    ixuDepth = 2
+    isMovEliUsed = False
     fuPool = O3_ARM_v7a_FUP()
     iewToCommitDelay = 1
     renameToROBDelay = 1
@@ -146,10 +147,10 @@ class O3_ARM_v7a_3(DerivO3CPU):
     numPhysIntRegs = 128
     numPhysFloatRegs = 192
     numIQEntries = 64
-    numROBEntries = 128
     isBundleCommitUsed = True
+    isBundleCommitUsed = False
     bundleLimit = 128 
-    historyTableEntries = 79
+    historyTableEntries = 89
     bundleBufferEntries = 16 
 
     switched_out = False

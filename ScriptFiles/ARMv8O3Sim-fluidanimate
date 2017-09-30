@@ -33,6 +33,8 @@ gem5_binary_path=./gem5-opt
 se_file_path=/home/shumin/LG_Project/gem5/configs/example
 config_root=/home/shumin/LG_Project/gem5/configs/common
 config_name=$1
+front_cfg=$2
+back_cfg=$3
 
 # Benchmark environment registration
 # SPEC2006 INT
@@ -84,16 +86,19 @@ for ixuDepth in ${ixuDepth_num}; do
 forward_conf="500000000"
 for forwardNum in ${forward_conf}; do
 
-mov_conf="True"
-for movElimination in ${mov_conf}; do
+bundle_conf="${front_cfg}"
+for bundleCommit in ${bundle_conf}; do
+
+mov_conf="${back_cfg}"
+for PIXU in ${mov_conf}; do
             
-    echo "######## ${bench} IXU width: ${ixuWidth}, IXU depth: ${ixuDepth}, MOV Elimination: ${movElimination} ########"
+    echo "######## ${bench} IXU width: ${ixuWidth}, IXU depth: ${ixuDepth}, MOV Elimination: ${PIXU} ########"
 
     # Modify configure file
-    echo "{if (NR == 133) print \"    ixuWidth = ${ixuWidth}\" > \"${config_root}/O3_ARM_v7a.abc\";
-           else if (NR == 134) print \"    ixuDepth = ${ixuDepth}\" > \"${config_root}/O3_ARM_v7a.abc\";
-           else if (NR == 132) print \"    isIXUUsed = ${movElimination}\" > \"${config_root}/O3_ARM_v7a.abc\";
-           else if (NR == 135) print \"    isMovEliUsed = ${movElimination}\" > \"${config_root}/O3_ARM_v7a.abc\";
+    echo "{if (NR == 135) print \"    ixuWidth = ${ixuWidth}\" > \"${config_root}/O3_ARM_v7a.abc\";
+           else if (NR == 136) print \"    ixuDepth = ${ixuDepth}\" > \"${config_root}/O3_ARM_v7a.abc\";
+           else if (NR == 134) print \"    isIXUUsed = ${PIXU}\" > \"${config_root}/O3_ARM_v7a.abc\";
+		   else if (NR == 150) print \"    isBundleCommitUsed = ${bundleCommit}\" > \"${config_root}/O3_ARM_v7a.abc\";
            else print \$0 > \"${config_root}/O3_ARM_v7a.abc\"}" > awkprog
 
     echo "{print \$0 > \"${config_root}/O3_ARM_v7a.py\"}" > awkprog1
@@ -106,9 +111,11 @@ for movElimination in ${mov_conf}; do
     args=`awk -F'*' '{print $4}' $bench`
     stdin=`awk -F'*' '{print $6}' $bench`
                                                                                                                                            
-    echo `gem5.opt --outdir=${output_path}_${config_name}_Mixed-${movElimination}_W${ixuWidth}D${ixuDepth} --stats-file=${bench}_${config_name}_Mixed-${movElimination}_W${ixuWidth}D${ixuDepth} ${se_file_path}/se.py --fast-forward=${forwardNum} --cpu-type=arm_detailed --sys-clock=1GHz --cpu-clock=1GHz --num-cpus=1 --caches --l2cache --mem-type=DDR3_1600_8x8 --mem-size=8192MB --maxinst=$MAX_INST --cmd=$exe --options="${args}" &> $simresult_root/${bench}_${config_name}_Mixed-${movElimination}_W${ixuWidth}D${ixuDepth}`
+	echo `gem5.opt --outdir=${output_path}_${config_name}_Front:${PIXU}_Back:${bundleCommit} --stats-file=${bench}_${config_name}_Front:${PIXU}_Back:${bundleCommit} ${se_file_path}/se.py --cpu-type=arm_detailed --sys-clock=1GHz --cpu-clock=1GHz --num-cpus=1 --caches --l2cache --mem-type=DDR3_1600_8x8 --mem-size=8192MB --maxinst=$MAX_INST --cmd=$exe --options="${args}" &> $simresult_root/${bench}_${config_name}_Front:${PIXU}_Back:${bundleCommit}`
                                                                                                                                            
     echo "**************** ${bench} is finished **************"
+
+done
 
 done
 

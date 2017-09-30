@@ -193,6 +193,11 @@ DefaultRename<Impl>::regStats()
         .desc("Number of floating rename lookups")
         .prereq(fpRenameLookups);
 
+    numOfReadyInsts
+        .name(name() + ".numOfReadyInsts")
+        .desc("Number of ready to issue instructions");
+
+
 	/****************** MOV Elimination *********************/
     numOfMOVInst
         .name(name() + ".numOfMOVInst")
@@ -279,6 +284,8 @@ DefaultRename<Impl>::resetStage()
 
     resumeSerialize = false;
     resumeUnblocking = false;
+
+	DPRINTF(Rename, "[BC] Rename is reset\n");
 
     // Grab the number of free entries directly from the stages.
     for (ThreadID tid = 0; tid < numThreads; tid++) {
@@ -766,6 +773,8 @@ DefaultRename<Impl>::renameInsts(ThreadID tid)
 
         renameDestRegs(inst, inst->threadNumber);
 
+
+
 		/* Add move instruction to removeList */
 		if(inst->isEliminatedMovInst == true)
 		{
@@ -813,7 +822,15 @@ DefaultRename<Impl>::renameInsts(ThreadID tid)
 
         // Decrement how many instructions are available.
         --insts_available;
+
+		if(inst->readyToIssue())
+		{
+			numOfReadyInsts++;
+		}
+
     }
+
+
 
     instsInProgress[tid] += renamed_insts;
     renameRenamedInsts += renamed_insts;
@@ -1212,7 +1229,6 @@ DefaultRename<Impl>::renameSrcRegs(DynInstPtr &inst, ThreadID tid)
         if (scoreboard->getReg(renamed_reg)) {
             DPRINTF(Rename, "[tid:%u]: Register %d is ready.\n",
                     tid, renamed_reg);
-
             inst->markSrcRegReady(src_idx);
         } else {
             DPRINTF(Rename, "[tid:%u]: Register %d is not ready.\n",
@@ -1221,6 +1237,7 @@ DefaultRename<Impl>::renameSrcRegs(DynInstPtr &inst, ThreadID tid)
 
         ++renameRenameLookups;
     }
+
 }
 
 template <class Impl>

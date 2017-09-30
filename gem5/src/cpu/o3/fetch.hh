@@ -336,6 +336,9 @@ class DefaultFetch
 	// push bundle info corresponding this instruction to BQ
 	void pushBundleInfoToBQ(DynInstPtr &inst);
 
+	// Check if instruction is bunlde mode by referring the BQ 
+	bool isPresentInBQ(DynInstPtr &inst);
+
 /**********************************************************************/
     /** Updates overall fetch stage status; to be called at the end of each
      * cycle. */
@@ -602,6 +605,10 @@ class DefaultFetch
     Stats::Formula branchRate;
     /** Number of instruction fetched per cycle. */
     Stats::Formula fetchRate;
+
+	Stats::Scalar numOfBHTRead;
+
+	Stats::Scalar numOfBQUpdate;
 };
 
 #endif //__CPU_O3_FETCH_HH__

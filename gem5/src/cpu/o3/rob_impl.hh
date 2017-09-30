@@ -116,6 +116,7 @@ ROB<Impl>::resetState()
         threadEntries[tid] = 0;
         squashIt[tid] = instList[tid].end();
         squashedSeqNum[tid] = 0;
+		prev_squashed_seq_num[tid] = 0;
     }
     numInstsInROB = 0;
 
@@ -363,15 +364,10 @@ ROB<Impl>::doSquash(ThreadID tid)
  *  	until branch seqNum < start inst seqNum | BQ size == 0
  * ******************************************************************/
 
-	if(isBCUsed == true)
-	{
-
-	// TODO: Flush bundle info on BQ 
-	// while(branch seqNum < start inst seqNum || BQ.size() == 0)
-	// First, access BQ back
-	squashBQ(squashedSeqNum[tid], tid);
-
-	}
+//	if(violationFlag == true)
+//	{
+//		violationInstNum = squashedSeqNum[tid];
+//	}
 
 /**********************************************************************/
     if ((*squashIt[tid])->seqNum < squashedSeqNum[tid]) {
@@ -547,6 +543,11 @@ ROB<Impl>::squash(InstSeqNum squash_num, ThreadID tid)
 
         squashIt[tid] = tail_thread;
 
+		if(isBCUsed == true)
+		{
+			squashBQ(squashedSeqNum[tid], tid);
+		}
+
         doSquash(tid);
     }
 }
@@ -605,6 +606,46 @@ ROB<Impl>::findInst(ThreadID tid, InstSeqNum squash_inst)
 template <typename Impl>
 void ROB<Impl>::squashBQ(InstSeqNum squash_seq, ThreadID tid)
 {
+	if(lwModule->bundleQueue.size() == 0)
+	{
+		return;
+	}
+
+	LWModule::BundleQueueEntry *bundle_info = lwModule->bundleQueue.back();
+
+	DPRINTF(ROB, "[BC] BQ size:%d start_seq:%d [sn:%i]\n",
+			lwModule->bundleQueue.size(), bundle_info->start_seq, squash_seq);
+
+	while(lwModule->bundleQueue.size() != 0 &&
+		bundle_info->start_seq > squash_seq)
+	{
+		DPRINTF(ROB, "[BQ] BQ is squashed [start_sn:%d]\n", bundle_info->start_seq);
+
+		delete []bundle_info->lwit;
+
+		delete bundle_info;
+
+		lwModule->bundleQueue.pop_back();
+
+		if(lwModule->bundleQueue.size() == 0)
+			break;
+		
+		bundle_info = lwModule->bundleQueue.back();
+	}
+}
+
+template <typename Impl>
+bool ROB<Impl>::isSquashDetectedOnce(InstSeqNum squash_seq, ThreadID tid)
+{
+	bool result = false;
+
+	if(prev_squashed_seq_num[tid] != squash_seq &&
+		prev_squashed_seq_num[tid] < squash_seq)
+	{
+		result = true;
+	}
+
+	return result;
 }
 
 #endif//__CPU_O3_ROB_IMPL_HH__

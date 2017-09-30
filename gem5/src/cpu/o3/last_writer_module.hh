@@ -52,12 +52,19 @@ class LWModule
 
 			// Start seq number of instruction
 			Addr start_pc;
+			
+			// Start instruction micro pc 
+			uint8_t start_micro_pc;
 
 			// End seq number of instruction 
 			Addr end_pc;
+			
+			// End instruction micro pc 
+			uint8_t end_micro_pc;
 
 			// Last Writer Index Table
-			std::vector<LWIT_Entry> lwit;
+			LWIT_Entry *lwit;
+//			std::vector<LWIT_Entry> lwit;
 		};
 
 		struct BundleQueueEntry
@@ -69,6 +76,7 @@ class LWModule
 				count = 0;
 				bundle_commit = false;
 				start_pc = 0;
+				end_pc = 0;
 				start_seq = 0;
 				end_seq = 0;
 			}
@@ -88,12 +96,21 @@ class LWModule
 			// Start instructio pc
 			Addr start_pc;
 
+			// Start instruction micro pc 
+			uint8_t start_micro_pc;
+
+			// End instruction pc
+			Addr end_pc;
+
+			// End instruction micro pc 
+			uint8_t end_micro_pc;
+
 			uint64_t start_seq;
 
 			uint64_t end_seq;
 			
 			// Last Writer Index Table
-			std::vector<LWIT_Entry> lwit;
+			LWIT_Entry *lwit;
 		};
 
 		// Constructor
@@ -107,10 +124,11 @@ class LWModule
 		{}
 
 		// Bundle History Table
-		std::vector<BundleHistoryEntry> bundleHistoryTable;
+//		std::vector<BundleHistoryEntry> bundleHistoryTable;
+		BundleHistoryEntry *bundleHistoryTable;
 
 		// Bundle Queue 
-		std::deque<BundleQueueEntry> bundleQueue;
+		std::deque<BundleQueueEntry*> bundleQueue;
 
 		// Member Functions
 
@@ -132,9 +150,19 @@ class LWModule
 			this->bundleHistoryTable[idx].start_pc = _start_pc;
 		}
 
+		void setStartMicroPCToBHT(unsigned idx, uint8_t _start_micro_pc)
+		{
+			this->bundleHistoryTable[idx].start_micro_pc = _start_micro_pc;
+		}
+
 		void setEndPCToBHT(unsigned idx, Addr _end_pc)
 		{
 			this->bundleHistoryTable[idx].end_pc = _end_pc;
+		}
+
+		void setEndMicroPCToBHT(unsigned idx, uint8_t _end_micro_pc)
+		{
+			this->bundleHistoryTable[idx].end_micro_pc = _end_micro_pc;
 		}
 
 		unsigned incrementSizeToBHT(unsigned idx)
@@ -169,6 +197,21 @@ class LWModule
 			bq_entry.start_pc = _start_pc;
 		}
 
+		void setStartMicroPCToBQ(BundleQueueEntry &bq_entry, uint8_t _start_micro_pc)
+		{
+			bq_entry.start_micro_pc = _start_micro_pc;
+		}
+
+		void setEndPCToBQ(BundleQueueEntry &bq_entry, Addr _end_pc)
+		{
+			bq_entry.end_pc = _end_pc;
+		}
+
+		void setEndMicroPCToBQ(BundleQueueEntry &bq_entry, uint8_t _end_micro_pc)
+		{
+			bq_entry.end_micro_pc = _end_micro_pc;
+		}
+
 		void setBundleCommitToBQ(BundleQueueEntry &bq_entry)
 		{
 			bq_entry.bundle_commit = true;
@@ -189,7 +232,12 @@ class LWModule
 			bq_entry.count++;
 		}
 
-		void setLWITTOBQ(BundleQueueEntry &bq_entry, BundleHistoryEntry &bundle_history);
+		void setCountToBQ(BundleQueueEntry &bq_entry, unsigned _count)
+		{
+			bq_entry.count = _count;
+		}
+
+		void setLWITToBQ(BundleQueueEntry &bq_entry, BundleHistoryEntry &bundle_history);
 
 	private:
 };
