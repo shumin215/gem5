@@ -1684,6 +1684,11 @@ void DefaultCommit<Impl>::updateComInstStats(DynInstPtr &inst)
     // prefetches towards the total commit count.
     if (!inst->isNop() && !inst->isInstPrefetch()) {
         cpu->instDone(tid, inst);
+
+		if(isBCUsed == true && inst->bundle_info != NULL)
+		{
+			cpu->accelerate(tid);
+		}
     }
 
     //

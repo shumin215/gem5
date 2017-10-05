@@ -83,10 +83,10 @@ for ixuDepth in ${ixuDepth_num}; do
 		continue;
 	fi
 
-bundle_conf="${front_cfg}"
+bundle_conf="${back_cfg}"
 for bundleCommit in ${bundle_conf}; do
 
-mov_conf="${back_cfg}"
+mov_conf="${front_cfg}"
 for PIXU in ${mov_conf}; do
             
     echo "######## ${bench} IXU width: ${ixuWidth}, IXU depth: ${ixuDepth}, MOV Elimination: ${PIXU} ########"

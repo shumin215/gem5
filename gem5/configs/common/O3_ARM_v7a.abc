@@ -131,7 +131,7 @@ class O3_ARM_v7a_3(DerivO3CPU):
     issueToExecuteDelay = 1
     dispatchWidth = 3
     issueWidth = 8
-    isIXUUsed = True
+    isIXUUsed = False
     ixuWidth = 2
     ixuDepth = 2
     ixuDepth = 2
@@ -147,7 +147,6 @@ class O3_ARM_v7a_3(DerivO3CPU):
     numPhysIntRegs = 128
     numPhysFloatRegs = 192
     numIQEntries = 64
-    isBundleCommitUsed = True
     isBundleCommitUsed = False
     bundleLimit = 128 
     historyTableEntries = 89

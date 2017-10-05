@@ -776,7 +776,7 @@ DefaultRename<Impl>::renameInsts(ThreadID tid)
 
 
 		/* Add move instruction to removeList */
-		if(inst->isEliminatedMovInst == true)
+		if(inst->isEliminatedMovInst == true && isMovEliUsed == true)
 		{
 			DPRINTF(Rename, "Mov Elimination: move instruction is added into remove list [sn:%i]\n"
 					,inst->seqNum);
@@ -1252,6 +1252,13 @@ DefaultRename<Impl>::renameDestRegs(DynInstPtr &inst, ThreadID tid)
 	bool isMovInst = isMovInstruction(inst) && hasTwoOperands(inst) 
 		&& !hasImmediateValueInMov(inst) && !hasInstPCReg(inst);
 
+	if(isMovInst == true)
+	{
+		/* Count eliminated mov instructions */
+		numOfEliminatedInst++;
+//		inst->isEliminatedMovInst = true;
+	}
+
     // Rename the destination registers.
     for (int dest_idx = 0; dest_idx < num_dest_regs; dest_idx++) {
 		/* dest_reg: architectural reg index */
@@ -1365,7 +1372,7 @@ DefaultRename<Impl>::renameDestRegs(DynInstPtr &inst, ThreadID tid)
         inst->flattenDestReg(dest_idx, flat_uni_dest_reg);
 
         // Mark Scoreboard entry as not ready
-		if(inst->isEliminatedMovInst != true)
+		if(inst->isEliminatedMovInst != true && isMovEliUsed == true)
 		{
 			scoreboard->unsetReg(rename_result.first);
 		}
@@ -1378,12 +1385,12 @@ DefaultRename<Impl>::renameDestRegs(DynInstPtr &inst, ThreadID tid)
         RenameHistory hb_entry(inst->seqNum, flat_uni_dest_reg, // arch reg
                                rename_result.first,  	// new phys reg
                                rename_result.second, 	// previous physical reg
-								inst->isEliminatedMovInst);
+							(isMovEliUsed == true) ? inst->isEliminatedMovInst : false);
 
         historyBuffer[tid].push_front(hb_entry);
 
 		/* Push instruction to stat buffer */
-		if(buffer_for_stats.size() < BUFFER_SIZE && inst->isEliminatedMovInst)
+		if(isMovEliUsed == true && buffer_for_stats.size() < BUFFER_SIZE && inst->isEliminatedMovInst)
 		{
 			if(dest_idx == 0)
 			{

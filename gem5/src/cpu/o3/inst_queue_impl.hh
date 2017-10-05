@@ -596,6 +596,10 @@ InstructionQueue<Impl>::insert(DynInstPtr &new_inst)
     }
 
     ++iqInstsAdded;
+	if(new_inst->isExecInIXU == true || new_inst->isEliminatedMovInst == true)
+	{
+//		iqInstsAdded--;
+	}
 
     count[new_inst->threadNumber]++;
 
@@ -861,7 +865,14 @@ InstructionQueue<Impl>::scheduleReadyInsts()
             }
 
             issuing_inst->setIssued();
+
             ++total_issued;
+
+			if(issuing_inst->isExecInIXU == true || 
+					issuing_inst->isEliminatedMovInst == true)
+			{
+//				total_issued--;
+			}
 
 #if TRACING_ON
             issuing_inst->issueTick = curTick() - issuing_inst->fetchTick;

@@ -1423,7 +1423,7 @@ void FullO3CPU<Impl>::accelerate(ThreadID tid)
 {
 	ran_counter++;
 
-	if(ran_counter >= 5)
+	if(ran_counter >= 6)
 	{
 		ran_counter = 0;
 
@@ -1489,10 +1489,10 @@ FullO3CPU<Impl>::instDone(ThreadID tid, DynInstPtr &inst)
         committedInsts[tid]++;
         system->totalNumInsts++;
 
-		if(isBCUsed == true)
-		{
-			accelerate(tid);
-		}
+//		if(isBCUsed == true)
+//		{
+//			accelerate(tid);
+//		}
 
         // Check for instruction-count-based events.
         comInstEventQueue[tid]->serviceEvents(thread[tid]->numInst);
