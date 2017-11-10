@@ -302,21 +302,25 @@ DefaultCommit<Impl>::regStats()
         .name(name() + ".numOfLastWriter")
         .desc("number of last writer") ;
 
-    numOfBHTUpdateInCommit
-        .name(name() + ".numOfBHTUpdateInCommit")
-        .desc("number of update count for BHT in commit stage") ;
-
-    numOfBQReadInCommit
-        .name(name() + ".numOfBQReadInCommit")
-        .desc("number of read count for BQ in commit stage") ;
-
-    numOfBQUpdateInCommit
-        .name(name() + ".numOfBQUpdateInCommit")
-        .desc("number of update count for BQ in commit stage") ;
+//    numOfBHTUpdateInCommit
+//        .name(name() + ".numOfBHTUpdateInCommit")
+//        .desc("number of update count for BHT in commit stage") ;
+//
+//    numOfBQReadInCommit
+//        .name(name() + ".numOfBQReadInCommit")
+//        .desc("number of read count for BQ in commit stage") ;
+//
+//    numOfBQUpdateInCommit
+//        .name(name() + ".numOfBQUpdateInCommit")
+//        .desc("number of update count for BQ in commit stage") ;
 
     committedBundleCount
         .name(name() + ".committedBundleCount")
         .desc("number of committed bundles") ;
+
+    numOfBundleCommittedInst
+        .name(name() + ".numOfBundleCommittedInst")
+        .desc("number of bundle committed instructions") ;
 }
 
 template <class Impl>
@@ -1331,6 +1335,8 @@ DefaultCommit<Impl>::commitHead(DynInstPtr &head_inst, unsigned inst_num)
 	// This instruction is for bundle commit 
 	if(head_inst->bundle_info != NULL)
 	{
+		// this is for stats
+		head_inst->isBundleCommitted = true;
 
 		//TODO: If end instruction in bundle, 
 		if(isEndInBundle(head_inst))
@@ -1397,7 +1403,8 @@ DefaultCommit<Impl>::commitHead(DynInstPtr &head_inst, unsigned inst_num)
 				lwModule->bundleHistoryTable[BHT_idx].size, BHT_idx, head_inst->seqNum);
 
 			// for stats
-			numOfBHTUpdateInCommit++;
+//			numOfBHTUpdateInCommit++;
+			fetch_ptr->CountBHTWrite();
 
 			// Reset BHT index
 			BHT_idx = -1;
@@ -1676,6 +1683,11 @@ void DefaultCommit<Impl>::updateComInstStats(DynInstPtr &inst)
 {
     ThreadID tid = inst->threadNumber;
 
+	if(isBCUsed == true && inst->bundle_info != NULL)
+	{
+		numOfBundleCommittedInst++;
+	}
+
     if (!inst->isMicroop() || inst->isLastMicroop())
         instsCommitted[tid]++;
     opsCommitted[tid]++;
@@ -1685,9 +1697,19 @@ void DefaultCommit<Impl>::updateComInstStats(DynInstPtr &inst)
     if (!inst->isNop() && !inst->isInstPrefetch()) {
         cpu->instDone(tid, inst);
 
-		if(isBCUsed == true && inst->bundle_info != NULL)
+		if((isIXUUsed == true && inst->isExecInIXU == true) ||
+		(isBCUsed == true && inst->bundle_info != NULL &&
+			inst->isLW == false))
 		{
-			cpu->accelerate(tid);
+			if(inst->isExecInIXU == true)
+			{
+				cpu->accelerateForFrontend(tid);
+			}
+
+			if(inst->isLW == false)
+			{
+				cpu->accelerate(tid);
+			}
 		}
     }
 
@@ -1848,7 +1870,8 @@ void DefaultCommit<Impl>::incrementCount(DynInstPtr &inst)
 	DPRINTF(Commit, "** BundleCount:%d [sn:%i]\n",
 			bundle_info->count, inst->seqNum);
 
-	numOfBQUpdateInCommit++;
+//	numOfBQUpdateInCommit++;
+	fetch_ptr->CountBQWrite();
 }
 
 template <typename Impl>
@@ -1866,7 +1889,8 @@ void DefaultCommit<Impl>::checkCanBundleCommit(DynInstPtr &inst)
 		lwModule->setBundleCommitToBQ(*bundle_info);
 	}
 
-	numOfBQReadInCommit++;
+//	numOfBQReadInCommit++;
+	fetch_ptr->CountBQRead();
 }
 
 template <typename Impl>
@@ -1886,7 +1910,8 @@ void DefaultCommit<Impl>::setBundleInfoTOBHT(DynInstPtr &inst, unsigned BHT_idx)
 		lwModule->setLWRelIdx(BHT_idx, dest_reg, rel_idx);
 	}
 
-	numOfBHTUpdateInCommit++;
+//	numOfBHTUpdateInCommit++;
+	fetch_ptr->CountBHTWrite();
 }
 
 // TODO: If this instruction is last writer when instruction is bundle mode
@@ -1922,7 +1947,8 @@ bool DefaultCommit<Impl>::isLastWriter(DynInstPtr &inst)
 		}
 	}
 
-	numOfBQReadInCommit++;
+//	numOfBQReadInCommit++;
+	fetch_ptr->CountBQRead();
 
 	return result;
 }
@@ -1946,7 +1972,8 @@ bool DefaultCommit<Impl>::isEndInBundle(DynInstPtr &inst)
 		result = true;
 	}
 
-	numOfBQReadInCommit++;
+//	numOfBQReadInCommit++;
+	fetch_ptr->CountBQRead();
 
 	return result;
 }
@@ -1986,7 +2013,8 @@ void DefaultCommit<Impl>::popBundleInfo(DynInstPtr &inst)
 
 		bundle_info = lwModule->bundleQueue.front();
 
-		numOfBQUpdateInCommit++;
+//		numOfBQUpdateInCommit++;
+		fetch_ptr->CountBQWrite();
 	}
 }
 
@@ -1997,7 +2025,8 @@ void DefaultCommit<Impl>::setEndSeqNumToBQ(DynInstPtr &inst)
 
 	lwModule->setEndSeqToBQ(bundle_info, inst->seqNum);
 
-	numOfBQUpdateInCommit++;
+//	numOfBQUpdateInCommit++;
+	fetch_ptr->CountBQWrite();
 }
 
 template <typename Impl>
@@ -2008,7 +2037,8 @@ void DefaultCommit<Impl>::squashBQ(InstSeqNum squash_seq, ThreadID tid)
 		return;
 	}
 
-	numOfBQUpdateInCommit++;
+//	numOfBQUpdateInCommit++;
+	fetch_ptr->CountBQWrite();
 
 	LWModule::BundleQueueEntry *bundle_info = lwModule->bundleQueue.back();
 
@@ -2057,6 +2087,7 @@ bool DefaultCommit<Impl>::itsBundleIsInBQ(DynInstPtr &inst)
 		DPRINTF(Commit, "[BC] there is no bundle [bundle size:%d][start_seq:%d][sn:%i]\n",
 				bundle_info->size, bundle_info->start_seq, inst->seqNum);
 	}
+	fetch_ptr->CountBQRead();
 
 	return result;
 }
@@ -2077,7 +2108,8 @@ bool DefaultCommit<Impl>::canBundleCommit(DynInstPtr &inst)
 		result = true;
 	}
 
-	numOfBQReadInCommit++;
+//	numOfBQReadInCommit++;
+	fetch_ptr->CountBQRead();
 
 	return result;
 }
@@ -2101,7 +2133,8 @@ bool DefaultCommit<Impl>::isExceptionSet(DynInstPtr &inst)
 				bundle_info->start_seq, inst->seqNum);
 	}
 
-	numOfBQReadInCommit++;
+//	numOfBQReadInCommit++;
+	fetch_ptr->CountBQRead();
 
 	return result;
 }
@@ -2113,7 +2146,8 @@ void DefaultCommit<Impl>::initializeAnalysis(void)
 	isStartInBundle = true;
 	BHT_idx = -1;
 
-	numOfBHTUpdateInCommit++;
+//	numOfBHTUpdateInCommit++;
+	fetch_ptr->CountBHTWrite();
 }
 
 template <typename Impl>
@@ -2126,7 +2160,8 @@ bool DefaultCommit<Impl>::searchItsBundleInBQ(DynInstPtr &inst)
 	{
 		LWModule::BundleQueueEntry *bundle_info = lwModule->bundleQueue[i];
 
-		numOfBQReadInCommit++;
+//		numOfBQReadInCommit++;
+		fetch_ptr->CountBQRead();
 
 		assert(bundle_info->size != 0);
 
@@ -2151,7 +2186,8 @@ void DefaultCommit<Impl>::setExceptionInBQ(DynInstPtr &inst)
 
 	lwModule->setExceptionToBQ(*bundle_info);
 
-	numOfBQUpdateInCommit++;
+//	numOfBQUpdateInCommit++;
+	fetch_ptr->CountBQWrite();
 }
 
 #endif//__CPU_O3_COMMIT_IMPL_HH__

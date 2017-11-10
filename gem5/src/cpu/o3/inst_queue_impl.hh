@@ -566,7 +566,10 @@ template <class Impl>
 void
 InstructionQueue<Impl>::insert(DynInstPtr &new_inst)
 {
+	if(new_inst->isEliminatedMovInst == false && new_inst->isExecInIXU == false)
+	{
     new_inst->isFloating() ? fpInstQueueWrites++ : intInstQueueWrites++;
+	}
     // Make sure the instruction is valid
     assert(new_inst);
 
@@ -598,7 +601,7 @@ InstructionQueue<Impl>::insert(DynInstPtr &new_inst)
     ++iqInstsAdded;
 	if(new_inst->isExecInIXU == true || new_inst->isEliminatedMovInst == true)
 	{
-//		iqInstsAdded--;
+		iqInstsAdded--;
 	}
 
     count[new_inst->threadNumber]++;
@@ -663,11 +666,16 @@ InstructionQueue<Impl>::getInstToExecute()
     assert(!instsToExecute.empty());
     DynInstPtr inst = instsToExecute.front();
     instsToExecute.pop_front();
-    if (inst->isFloating()){
-        fpInstQueueReads++;
-    } else {
-        intInstQueueReads++;
-    }
+
+	if(inst->isEliminatedMovInst == false && 
+			inst->isExecInIXU == false)
+	{
+		if (inst->isFloating()){
+			fpInstQueueReads++;
+		} else {
+			intInstQueueReads++;
+		}
+	}
     return inst;
 }
 
@@ -813,7 +821,10 @@ InstructionQueue<Impl>::scheduleReadyInsts()
 
         if (op_class != No_OpClass) {
             idx = fuPool->getUnit(op_class);
+			if(issuing_inst->isEliminatedMovInst == false && issuing_inst->isExecInIXU == false)
+			{
             issuing_inst->isFloating() ? fpAluAccesses++ : intAluAccesses++;
+			}
             if (idx > FUPool::NoFreeFU) {
                 op_latency = fuPool->getOpLatency(op_class);
             }
@@ -871,14 +882,15 @@ InstructionQueue<Impl>::scheduleReadyInsts()
 			if(issuing_inst->isExecInIXU == true || 
 					issuing_inst->isEliminatedMovInst == true)
 			{
-//				total_issued--;
+				total_issued--;
 			}
 
 #if TRACING_ON
             issuing_inst->issueTick = curTick() - issuing_inst->fetchTick;
 #endif
 
-            if (!issuing_inst->isMemRef()) {
+            if (!issuing_inst->isMemRef() && issuing_inst->isExecInIXU != true) 
+			{
                 // Memory instructions can not be freed from the IQ until they
                 // complete.
                 ++freeEntries;
@@ -968,11 +980,14 @@ InstructionQueue<Impl>::wakeDependents(DynInstPtr &completed_inst)
     int dependents = 0;
 
     // The instruction queue here takes care of both floating and int ops
-    if (completed_inst->isFloating()) {
-        fpInstQueueWakeupQccesses++;
-    } else {
-        intInstQueueWakeupAccesses++;
-    }
+	if(completed_inst->isEliminatedMovInst == false && completed_inst->isExecInIXU == false)
+	{
+		if (completed_inst->isFloating()) {
+			fpInstQueueWakeupQccesses++;
+		} else {
+			intInstQueueWakeupAccesses++;
+		}
+	}
 
     DPRINTF(IQ, "Waking dependents of completed instruction.\n");
 
@@ -1632,6 +1647,13 @@ void InstructionQueue<Impl>::addToDependentsFromIXU(DynInstPtr &inst)
 
 		regScoreboard[dest_reg] = false;
 	}
+}
+
+template<typename Impl>
+void InstructionQueue<Impl>::decrementIQEntries(void)
+{
+	assert(freeEntries != 0);
+    --freeEntries;
 }
 
 #endif//__CPU_O3_INST_QUEUE_IMPL_HH__

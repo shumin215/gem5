@@ -114,6 +114,7 @@ BaseDynInst<Impl>::initVars()
 
 	bundle_info = NULL;
 	isLW = true;
+	isBundleCommitted = false;
 
     lqIdx = -1;
     sqIdx = -1;

@@ -457,6 +457,8 @@ class FullO3CPU : public BaseO3CPU
 	// Accelerate
 	void accelerate(ThreadID tid);
 
+	void accelerateForFrontend(ThreadID tid);
+
     /** Reads the commit PC state of a specific thread. */
     TheISA::PCState pcState(ThreadID tid);
 
@@ -684,6 +686,8 @@ class FullO3CPU : public BaseO3CPU
     std::map<ThreadID, unsigned> threadMap;
 
 	unsigned ran_counter;
+
+	unsigned ran_counter_frontend;
 
     /** Available thread ids in the cpu*/
     std::vector<ThreadID> tids;

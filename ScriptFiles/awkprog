@@ -1,5 +1,6 @@
 {if (NR == 135) print "    ixuWidth = 2" > "/home/shumin/LG_Project/gem5/configs/common/O3_ARM_v7a.abc";
            else if (NR == 136) print "    ixuDepth = 2" > "/home/shumin/LG_Project/gem5/configs/common/O3_ARM_v7a.abc";
-           else if (NR == 134) print "    isIXUUsed = False" > "/home/shumin/LG_Project/gem5/configs/common/O3_ARM_v7a.abc";
+           else if (NR == 134) print "    isIXUUsed = True" > "/home/shumin/LG_Project/gem5/configs/common/O3_ARM_v7a.abc";
+		   else if (NR == 149) print "    numIQEntries = 64" > "/home/shumin/LG_Project/gem5/configs/common/O3_ARM_v7a.abc";
 		   else if (NR == 150) print "    isBundleCommitUsed = False" > "/home/shumin/LG_Project/gem5/configs/common/O3_ARM_v7a.abc";
            else print $0 > "/home/shumin/LG_Project/gem5/configs/common/O3_ARM_v7a.abc"}

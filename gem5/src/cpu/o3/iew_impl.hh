@@ -1108,6 +1108,9 @@ DefaultIEW<Impl>::dispatchInsts(ThreadID tid)
 				/* we need to update another scoreboard, placed in inst_queue */
 				instQueue.addToDependentsFromIXU(inst);
 
+				/* we need to decrement IQ entries without insertion*/
+//				instQueue.decrementIQEntries();
+
 				/* Insert instruction to buffer in IXU */
 				buffer_of_ixu[0].push_back(inst);
 				insts_to_dispatch.pop();
@@ -1794,7 +1797,7 @@ DefaultIEW<Impl>::writebackInsts()
 			DPRINTF(IEW, "IXU: Instruction already passed writeback stage [sn:%i]\n"
 					, inst->seqNum);
 
-			inst->isExecInIXU = false;
+//			inst->isExecInIXU = false;
 			continue;
 		}
 
@@ -1822,7 +1825,7 @@ DefaultIEW<Impl>::writebackInsts()
 
 			if(isIXUUsed == true)
 			{
-				assert(inst->isExecInIXU == false);
+//				assert(inst->isExecInIXU == false);
 
 				int dependents = instQueue.wakeDependents(inst);
 
@@ -1982,7 +1985,11 @@ DefaultIEW<Impl>::updateExeInstStats(DynInstPtr &inst)
 {
     ThreadID tid = inst->threadNumber;
 
-    iewExecutedInsts++;
+	if(inst->isEliminatedMovInst == true)
+	{
+		return;
+	}
+	iewExecutedInsts++;
 
 #if TRACING_ON
     if (DTRACE(O3PipeView)) {
@@ -2288,7 +2295,7 @@ void DefaultIEW<Impl>::resetIHTatSquash(DynInstPtr &inst)
 {
 	int num_of_dest_regs = (int)inst->numDestRegs();
 
-	inst->isExecInIXU = false;
+//	inst->isExecInIXU = false;
 
 	for(int dest_idx=0; dest_idx<num_of_dest_regs; dest_idx++)
 	{

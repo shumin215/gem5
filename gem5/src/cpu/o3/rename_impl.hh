@@ -69,6 +69,7 @@ DefaultRename<Impl>::DefaultRename(O3CPU *_cpu, DerivO3CPUParams *params)
       commitToRenameDelay(params->commitToRenameDelay),
       renameWidth(params->renameWidth),
 	  isMovEliUsed(params->isMovEliUsed),
+	  isIXUUsed(params->isIXUUsed),
 	  isBCUsed(params->isBundleCommitUsed),
       commitWidth(params->commitWidth),
       numThreads(params->numThreads),
@@ -153,6 +154,7 @@ DefaultRename<Impl>::regStats()
         .name(name() + ".FullRegisterEvents")
         .desc("Number of times there has been no free registers")
         .prereq(renameFullRegistersEvents);
+
     renameRenamedOperands
         .name(name() + ".RenamedOperands")
         .desc("Number of destination operands rename has renamed")
@@ -222,6 +224,20 @@ DefaultRename<Impl>::regStats()
     numOfMovHavingPC
         .name(name() + ".numOfMovHavingPC")
         .desc("Number of MOV instructions that have source reg as PC register (r15)");
+
+    numOfIQFull
+        .name(name() + ".numOfIQFull")
+        .desc("Number of times rename has blocked due to IQ full");
+    numOfROBFull
+        .name(name() + ".numOfROBFull")
+        .desc("Number of times rename has blocked due to ROB full");
+    numOfFullPRF
+        .name(name() + ".numOfFullPRF")
+        .desc("Number of times there has been no free registers");
+
+    numOfExecutableInst
+        .name(name() + ".numOfExecutableInst")
+        .desc("Number of ready to issue instructions");
 }
 
 template <class Impl>
@@ -701,6 +717,10 @@ DefaultRename<Impl>::renameInsts(ThreadID tid)
             blockThisCycle = true;
             insts_to_rename.push_front(inst);
             ++renameFullRegistersEvents;
+			if(inst->bundle_info == NULL)
+			{
+				numOfFullPRF++;
+			}
 
             break;
         }
@@ -822,6 +842,8 @@ DefaultRename<Impl>::renameInsts(ThreadID tid)
 
         // Decrement how many instructions are available.
         --insts_available;
+
+		checkingExecutableInst(inst);
 
 		if(inst->readyToIssue())
 		{
@@ -1252,11 +1274,11 @@ DefaultRename<Impl>::renameDestRegs(DynInstPtr &inst, ThreadID tid)
 	bool isMovInst = isMovInstruction(inst) && hasTwoOperands(inst) 
 		&& !hasImmediateValueInMov(inst) && !hasInstPCReg(inst);
 
-	if(isMovInst == true)
+	if(isMovInst == true && isIXUUsed == true)
 	{
 		/* Count eliminated mov instructions */
 		numOfEliminatedInst++;
-//		inst->isEliminatedMovInst = true;
+		inst->isEliminatedMovInst = true;
 	}
 
     // Rename the destination registers.
@@ -1372,7 +1394,7 @@ DefaultRename<Impl>::renameDestRegs(DynInstPtr &inst, ThreadID tid)
         inst->flattenDestReg(dest_idx, flat_uni_dest_reg);
 
         // Mark Scoreboard entry as not ready
-		if(inst->isEliminatedMovInst != true && isMovEliUsed == true)
+		if(inst->isEliminatedMovInst != true || isMovEliUsed == false)
 		{
 			scoreboard->unsetReg(rename_result.first);
 		}
@@ -1518,6 +1540,8 @@ DefaultRename<Impl>::checkStall(ThreadID tid)
     } else if (calcFreeROBEntries(tid) <= 0) {
         DPRINTF(Rename,"[tid:%i]: Stall: ROB has 0 free entries.\n", tid);
         ret_val = true;
+
+
     } else if (calcFreeIQEntries(tid) <= 0) {
         DPRINTF(Rename,"[tid:%i]: Stall: IQ has 0 free entries.\n", tid);
         ret_val = true;
@@ -1688,9 +1712,11 @@ DefaultRename<Impl>::incrFullStat(const FullSource &source)
 {
     switch (source) {
       case ROB:
+		numOfROBFull++;
         ++renameROBFullEvents;
         break;
       case IQ:
+		numOfIQFull++;
         ++renameIQFullEvents;
         break;
       case LQ:
@@ -2031,6 +2057,26 @@ void DefaultRename<Impl>::updateInstSeqNum(InstSeqNum &inst_seq_num, ThreadID ti
 
 		/* Decrement iterator */
 		hb_iter--;
+	}
+}
+
+template <typename Impl>
+void DefaultRename<Impl>::checkingExecutableInst(DynInstPtr &inst)
+{
+    unsigned num_src_regs = inst->numSrcRegs();
+	int ready_count = 0;
+
+	for(int reg_idx=0; reg_idx<num_src_regs; reg_idx++)
+	{
+		if(inst->isReadySrcRegIdx(reg_idx))
+		{
+			ready_count++;
+		}
+	}
+
+	if(ready_count == num_src_regs)
+	{
+		numOfExecutableInst++;
 	}
 }
 

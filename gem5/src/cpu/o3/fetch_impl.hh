@@ -283,11 +283,19 @@ DefaultFetch<Impl>::regStats()
 
     numOfBHTRead
         .name(name() + ".numOfBHTRead")
-        .desc("Number of read count for BHT in fetch stage");
+        .desc("Number of read count for BHT");
 
-    numOfBQUpdate
-        .name(name() + ".numOfBQUpdate")
-        .desc("Number of update count for BQ in fetch stage");
+    numOfBHTWrite
+        .name(name() + ".numOfBHTWrite")
+        .desc("Number of write count for BHT");
+
+    numOfBQRead
+        .name(name() + ".numOfBQRead")
+        .desc("Number of read count for BQ");
+
+    numOfBQWrite
+        .name(name() + ".numOfBQWrite")
+        .desc("Number of write count for BQ");
 
     fetchNisnDist
         .init(/* base value */ 0,
@@ -1768,7 +1776,7 @@ void DefaultFetch<Impl>::pushBundleInfoToBQ(DynInstPtr &inst)
 	LWModule::BundleHistoryEntry &bundle_history = 
 		lwModule->bundleHistoryTable[BHT_idx];
 
-	numOfBQUpdate++;
+	numOfBQWrite++;
 
 	assert(bundle_history.valid == true);
 

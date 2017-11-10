@@ -259,6 +259,7 @@ FullO3CPU<Impl>::FullO3CPU(DerivO3CPUParams *params)
     commit.setIEWQueue(&iewQueue);
     commit.setRenameQueue(&renameQueue);
 
+	commit.setFetchStage(&fetch);
     commit.setIEWStage(&iew);
     rename.setIEWStage(&iew);
     rename.setCommitStage(&commit);
@@ -346,6 +347,7 @@ FullO3CPU<Impl>::FullO3CPU(DerivO3CPUParams *params)
     lastActivatedCycle = 0;
 
 	ran_counter = 0;
+	ran_counter_frontend = 0;
 #if 0
     // Give renameMap & rename stage access to the freeList;
     for (ThreadID tid = 0; tid < numThreads; tid++)
@@ -1423,9 +1425,29 @@ void FullO3CPU<Impl>::accelerate(ThreadID tid)
 {
 	ran_counter++;
 
-	if(ran_counter >= 6)
+	if(ran_counter >= 1)
 	{
 		ran_counter = 0;
+
+        thread[tid]->numInst++;
+        thread[tid]->numInsts++;
+        committedInsts[tid]++;
+        system->totalNumInsts++;
+
+		thread[tid]->numOp++;
+		thread[tid]->numOps++;
+		committedOps[tid]++;
+	}
+}
+
+template <typename Impl>
+void FullO3CPU<Impl>::accelerateForFrontend(ThreadID tid)
+{
+	ran_counter_frontend++;
+
+	if(ran_counter_frontend >= 4)
+	{
+		ran_counter_frontend = 0;
 
         thread[tid]->numInst++;
         thread[tid]->numInsts++;

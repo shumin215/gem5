@@ -136,6 +136,9 @@ class InstructionQueue
 	/* update another scoreboard, placed in instruction queue */
 	void addToDependentsFromIXU(DynInstPtr &inst);
 
+	/* Decrement IQ entries for PIXU */
+	void decrementIQEntries(void);
+
     /** Registers statistics. */
     void regStats();
 

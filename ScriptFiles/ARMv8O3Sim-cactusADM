@@ -82,6 +82,8 @@ for ixuDepth in ${ixuDepth_num}; do
 		echo "IXU Width: ${ixuWidth}, IXU Depth: ${ixuDepth} Unnecessary!";
 		continue;
 	fi
+IQ_conf="64"
+for IQConf in ${IQ_conf}; do
 
 forward_conf="100000000"
 for forwardNum in ${forward_conf}; do
@@ -98,6 +100,7 @@ for PIXU in ${mov_conf}; do
     echo "{if (NR == 135) print \"    ixuWidth = ${ixuWidth}\" > \"${config_root}/O3_ARM_v7a.abc\";
            else if (NR == 136) print \"    ixuDepth = ${ixuDepth}\" > \"${config_root}/O3_ARM_v7a.abc\";
            else if (NR == 134) print \"    isIXUUsed = ${PIXU}\" > \"${config_root}/O3_ARM_v7a.abc\";
+		   else if (NR == 149) print \"    numIQEntries = ${IQConf}\" > \"${config_root}/O3_ARM_v7a.abc\";
 		   else if (NR == 150) print \"    isBundleCommitUsed = ${bundleCommit}\" > \"${config_root}/O3_ARM_v7a.abc\";
            else print \$0 > \"${config_root}/O3_ARM_v7a.abc\"}" > awkprog
 
@@ -111,9 +114,11 @@ for PIXU in ${mov_conf}; do
     args=`awk -F'*' '{print $4}' $bench`
     stdin=`awk -F'*' '{print $6}' $bench`
                                                                                                                                            
-	echo `gem5.opt --outdir=${output_path}_${config_name}_Front:${PIXU}_Back:${bundleCommit} --stats-file=${bench}_${config_name}_Front:${PIXU}_Back:${bundleCommit} ${se_file_path}/se.py --fast-forward=$forwardNum --cpu-type=arm_detailed --sys-clock=1GHz --cpu-clock=1GHz --num-cpus=1 --caches --l2cache --mem-type=DDR3_1600_8x8 --mem-size=8192MB --maxinst=$MAX_INST --cmd=$exe --options="${args}" &> $simresult_root/${bench}_${config_name}_Front:${PIXU}_Back:${bundleCommit}`
+	echo `gem5.opt --outdir=${output_path}_${config_name}_Front:${PIXU}_Back:${bundleCommit}_IQ${IQConf} --stats-file=${bench}_${config_name}_Front:${PIXU}_Back:${bundleCommit}_IQ${IQConf} ${se_file_path}/se.py --cpu-type=arm_detailed --sys-clock=1GHz --cpu-clock=1GHz --num-cpus=1 --caches --l2cache --mem-type=DDR3_1600_8x8 --mem-size=8192MB --maxinst=$MAX_INST --cmd=$exe --options="${args}" &> $simresult_root/${bench}_${config_name}_Front:${PIXU}_Back:${bundleCommit}_IQ${IQConf}`
                                                                                                                                            
     echo "**************** ${bench} is finished **************"
+
+done
 
 done
 

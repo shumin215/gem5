@@ -29,6 +29,8 @@ gem5_binary_path=./gem5-opt
 se_file_path=/home/shumin/LG_Project/gem5/configs/example
 config_root=/home/shumin/LG_Project/gem5/configs/common
 config_name=$1
+front_cfg=$2
+back_cfg=$3
 
 # Benchmark environment registration
 # SPEC2006 INT
@@ -77,14 +79,14 @@ for ixuDepth in ${ixuDepth_num}; do
 		echo "IXU Width: ${ixuWidth}, IXU Depth: ${ixuDepth} Unnecessary!";
 		continue;
 	fi
-	
-forward_conf="500000000"
+
+forward_conf="2000000000"
 for forwardNum in ${forward_conf}; do
 
-bundle_conf="False True"
+bundle_conf="${back_cfg}"
 for bundleCommit in ${bundle_conf}; do
 
-mov_conf="False"
+mov_conf="${front_cfg}"
 for PIXU in ${mov_conf}; do
             
     echo "######## ${bench} IXU width: ${ixuWidth}, IXU depth: ${ixuDepth}, MOV Elimination: ${PIXU} ########"
@@ -106,6 +108,7 @@ for PIXU in ${mov_conf}; do
     args=`awk -F'*' '{print $4}' $bench`
     stdin=`awk -F'*' '{print $6}' $bench`
                                                                                                                                            
+#	echo `gem5.opt --outdir=${output_path}_${config_name}_Front:${PIXU}_Back:${bundleCommit} --stats-file=${bench}_${config_name}_Front:${PIXU}_Back:${bundleCommit} ${se_file_path}/se.py --cpu-type=arm_detailed --sys-clock=1GHz --cpu-clock=1GHz --num-cpus=1 --caches --l2cache --mem-type=DDR3_1600_8x8 --mem-size=8192MB --maxinst=$MAX_INST --cmd=$exe --options="${args}" &> $simresult_root/${bench}_${config_name}_Front:${PIXU}_Back:${bundleCommit}`
 	echo `gem5.opt --outdir=${output_path}_${config_name}_Front:${PIXU}_Back:${bundleCommit} --stats-file=${bench}_${config_name}_Front:${PIXU}_Back:${bundleCommit} ${se_file_path}/se.py --fast-forward=$forwardNum --cpu-type=arm_detailed --sys-clock=1GHz --cpu-clock=1GHz --num-cpus=1 --caches --l2cache --mem-type=DDR3_1600_8x8 --mem-size=8192MB --maxinst=$MAX_INST --cmd=$exe --options="${args}" &> $simresult_root/${bench}_${config_name}_Front:${PIXU}_Back:${bundleCommit}`
                                                                                                                                            
     echo "**************** ${bench} is finished **************"

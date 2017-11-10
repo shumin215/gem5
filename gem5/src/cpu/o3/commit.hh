@@ -419,9 +419,16 @@ class DefaultCommit
     /** ROB interface. */
     ROB *rob;
 
+	void setFetchStage(Fetch *fetch_stage)
+	{
+		fetch_ptr = fetch_stage;
+	}
+
   private:
     /** Pointer to O3CPU. */
     O3CPU *cpu;
+
+	Fetch *fetch_ptr;
 
     /** Vector of all of the threads. */
     std::vector<Thread *> thread;
@@ -472,6 +479,8 @@ class DefaultCommit
 
     /** Commit width, in instructions. */
     const unsigned commitWidth;
+
+	bool isIXUUsed;
 
 	// If bundle commit is used
 	bool isBCUsed;
@@ -598,13 +607,15 @@ class DefaultCommit
 	// Number of last Writer
 	Stats::Scalar numOfLastWriter;
 
-	Stats::Scalar numOfBHTUpdateInCommit;
-
-	Stats::Scalar numOfBQReadInCommit;
-
-	Stats::Scalar numOfBQUpdateInCommit;
+//	Stats::Scalar numOfBHTUpdateInCommit;
+//
+//	Stats::Scalar numOfBQReadInCommit;
+//
+//	Stats::Scalar numOfBQUpdateInCommit;
 
 	Stats::Scalar committedBundleCount;
+
+	Stats::Scalar numOfBundleCommittedInst;
 };
 
 #endif // __CPU_O3_COMMIT_HH__

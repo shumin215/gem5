@@ -8,6 +8,7 @@
 
 import os
 import sys
+import time
 from multiprocessing import Process, Pool, Lock, Array
 #from threading import Lock
 
@@ -32,6 +33,7 @@ def makeScriptFIles():
 def executeBenchmark():
 	for i in (program_list_spec + program_list_parcec):
 		os.system("./" + base_script_name + "-" + i + " " + suffix + " " + suffix2 + " " + suffix3 + " &")
+		time.sleep(0.1)
 
 def foo(name, lock, arr):
 

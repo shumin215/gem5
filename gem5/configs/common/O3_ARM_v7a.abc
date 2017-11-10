@@ -106,8 +106,8 @@ class O3_ARM_v7a_BP(BiModeBP):
     BCECtrBits = 2
 
 class O3_ARM_v7a_3(DerivO3CPU):
-    LQEntries = 16
-    SQEntries = 16
+    LQEntries = 16 # 16
+    SQEntries = 16 # 16, exp = 32
     LSQDepCheckShift = 0
     LFSTSize = 1024
     SSITSize = 1024
@@ -131,7 +131,7 @@ class O3_ARM_v7a_3(DerivO3CPU):
     issueToExecuteDelay = 1
     dispatchWidth = 3
     issueWidth = 8
-    isIXUUsed = False
+    isIXUUsed = True
     ixuWidth = 2
     ixuDepth = 2
     ixuDepth = 2
@@ -144,13 +144,14 @@ class O3_ARM_v7a_3(DerivO3CPU):
     trapLatency = 13
     backComSize = 5
     forwardComSize = 5
-    numPhysIntRegs = 128
+    numPhysIntRegs = 128 # default = 128, exp = 86
     numPhysFloatRegs = 192
     numIQEntries = 64
     isBundleCommitUsed = False
     bundleLimit = 128 
     historyTableEntries = 89
     bundleBufferEntries = 16 
+    numROBEntries = 128 # default = 128, exp = 56
 
     switched_out = False
     branchPred = O3_ARM_v7a_BP()
@@ -211,3 +212,4 @@ class O3_ARM_v7aL2(Cache):
     # Simple stride prefetcher
     prefetcher = StridePrefetcher(degree=8, latency = 1)
     tags = RandomRepl()
+

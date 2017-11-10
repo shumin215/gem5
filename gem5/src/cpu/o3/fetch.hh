@@ -248,6 +248,26 @@ class DefaultFetch
     /** Takes over from another CPU's thread. */
     void takeOverFrom();
 
+	void CountBHTRead(void)
+	{
+		this->numOfBHTRead++;
+	}
+
+	void CountBHTWrite(void)
+	{
+		this->numOfBHTWrite++;
+	}
+
+	void CountBQRead(void)
+	{
+		this->numOfBQRead++;
+	}
+
+	void CountBQWrite(void)
+	{
+		this->numOfBQWrite++;
+	}
+
     /**
      * Stall the fetch stage after reaching a safe drain point.
      *
@@ -607,8 +627,9 @@ class DefaultFetch
     Stats::Formula fetchRate;
 
 	Stats::Scalar numOfBHTRead;
-
-	Stats::Scalar numOfBQUpdate;
+	Stats::Scalar numOfBHTWrite;
+	Stats::Scalar numOfBQRead;
+	Stats::Scalar numOfBQWrite;
 };
 
 #endif //__CPU_O3_FETCH_HH__

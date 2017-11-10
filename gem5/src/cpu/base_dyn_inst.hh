@@ -259,6 +259,8 @@ class BaseDynInst : public ExecContext, public RefCounted
 
 	bool isLW;
 
+	bool isBundleCommitted;
+
 /**********************************************************************/
     /////////////////////// TLB Miss //////////////////////
     /**

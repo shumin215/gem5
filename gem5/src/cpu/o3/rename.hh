@@ -334,6 +334,9 @@ class DefaultRename
 	/* Update Inst Seq Num */
 	void updateInstSeqNum(InstSeqNum &inst_seq_num, ThreadID tid);
 
+	/* Check executable instruction*/
+	void checkingExecutableInst(DynInstPtr &inst);
+
     /** Either serializes on the next instruction available in the InstQueue,
      * or records that it must serialize on the next instruction to enter
      * rename.
@@ -495,6 +498,9 @@ class DefaultRename
 	/* Flag for MOV elimination technique */
 	bool isMovEliUsed;
 
+	// If PIXU is used 
+	bool isIXUUsed;
+
 	// If bundle commit is used
 	bool isBCUsed;
 
@@ -573,6 +579,7 @@ class DefaultRename
     /** Stat for total number of times that rename runs out of free registers
      * to use to rename. */
     Stats::Scalar renameFullRegistersEvents;
+
     /** Stat for total number of renamed destination registers. */
     Stats::Scalar renameRenamedOperands;
     /** Stat for total number of source register rename lookups. */
@@ -606,6 +613,15 @@ class DefaultRename
 	Stats::Scalar numOfImmediateMov;
 	/* Number of MOV instructions that have source reg as PC register (r15) */
 	Stats::Scalar numOfMovHavingPC;
+
+	/* Stat for IQ full event */
+	Stats::Scalar numOfIQFull;
+	/* Stat for ROB full event */
+	Stats::Scalar numOfROBFull;
+	/* Stat for PRF full event */
+	Stats::Scalar numOfFullPRF;
+
+	Stats::Scalar numOfExecutableInst;
 };
 
 #endif // __CPU_O3_RENAME_HH__
