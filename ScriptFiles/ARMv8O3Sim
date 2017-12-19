@@ -49,8 +49,6 @@ echo "*${parsec_benchmark_path}/pkgs/apps/blackscholes/inst/gcc-arm.gcc-arm/bin/
 echo "*${parsec_benchmark_path}/pkgs/apps/freqmine/obj/gcc-arm.gcc-arm/freqmine* *${parsec_source_root}/pkgs/apps/freqmine/inputs/kosarak_250k.dat 220* ** " > freqmine
 echo "*${parsec_benchmark_path}/pkgs/apps/fluidanimate/obj/gcc-arm.gcc-arm/fluidanimate* *1 5 ${parsec_source_root}/pkgs/apps/fluidanimate/inputs/in_500K.fluid out.fluid* ** " > fluidanimate
 
-
-
 for bench in ${Running_app_spec}; do
 	
     echo "######## $bench ########"

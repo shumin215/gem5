@@ -567,8 +567,14 @@ FullO3CPU<Impl>::tick()
 
     ++numCycles;
 	
+	/* JIP */
 	using namespace SimClock;
-	numBusyCycles++;
+	if (index_cpu <= 4)
+	{	
+		numBusyCycles[index_cpu]++;
+		numDispatchStallCycles[index_cpu] = iew.getBlockedCycles();
+		numICacheMissStallCycles[index_cpu] = fetch.getICacheMissStallCycles();
+	}
 
     ppCycles->notify(1);
 
@@ -1197,6 +1203,59 @@ FullO3CPU<Impl>::switchOut()
     if (checker)
         checker->switchOut();
 }
+//
+//big.LITTLE implementation - JIP
+template <class Impl>
+void
+FullO3CPU<Impl>::setCpuIndex(int i)
+{
+    DPRINTF(O3CPU, "Set CPU Index: %d\n", i);
+    
+	index_cpu = i;
+}
+
+/* Shumin:LyRIC */
+template <typename Impl>
+void FullO3CPU<Impl>::extendIQEntries(void)
+{
+    DPRINTF(O3CPU, "[LYRIC] Extending IQ entries \n");
+    iew.instQueue.setLargeWindowMode();
+}
+/* Shumin:LyRIC */
+template <typename Impl>
+void FullO3CPU<Impl>::extendROBEntries(void)
+{
+    DPRINTF(O3CPU, "[LYRIC] Extending ROB entries \n");
+    rob.setLargeWindowMode();
+}
+/* Shumin:LyRIC */
+template <typename Impl>
+void FullO3CPU<Impl>::extendLSQEntries(void)
+{
+    DPRINTF(O3CPU, "[LYRIC] Extending LSQ entries \n");
+    iew.ldstQueue.setLargeWindowMode();
+}
+/* Shumin:LyRIC */
+template <typename Impl>
+void FullO3CPU<Impl>::reduceIQEntries(void)
+{
+    DPRINTF(O3CPU, "[LYRIC] Reducing IQ entries \n");
+    iew.instQueue.resetLargeWindowMode();
+}
+/* Shumin:LyRIC */
+template <typename Impl>
+void FullO3CPU<Impl>::reduceROBEntries(void)
+{
+    DPRINTF(O3CPU, "[LYRIC] Reducing ROB entries \n");
+    rob.resetLargeWindowMode();
+}
+/* Shumin:LyRIC */
+template <typename Impl>
+void FullO3CPU<Impl>::reduceLSQEntries(void)
+{
+    DPRINTF(O3CPU, "[LYRIC] Reducing LSQ entries \n");
+    iew.ldstQueue.resetLargeWindowMode();
+}
 
 template <class Impl>
 void
@@ -1421,7 +1480,7 @@ FullO3CPU<Impl>::pcState(const TheISA::PCState &val, ThreadID tid)
 }
 
 template <typename Impl>
-void FullO3CPU<Impl>::accelerate(ThreadID tid)
+void FullO3CPU<Impl>::arbitrate(ThreadID tid)
 {
 	ran_counter++;
 
@@ -1441,7 +1500,7 @@ void FullO3CPU<Impl>::accelerate(ThreadID tid)
 }
 
 template <typename Impl>
-void FullO3CPU<Impl>::accelerateForFrontend(ThreadID tid)
+void FullO3CPU<Impl>::arbitrateForFrontend(ThreadID tid)
 {
 	ran_counter_frontend++;
 
@@ -1710,12 +1769,13 @@ FullO3CPU<Impl>::wakeCPU()
         idleCycles += cycles;
         numCycles += cycles;
 		
-		using namespace SimClock;
-
 		//JIP: big.LITTLE
-		numIdleCycles += cycles;
-		numBusyCycles += cycles;
-
+		using namespace SimClock;
+		if (index_cpu <= 4)
+		{
+			numIdleCycles[index_cpu] += cycles;
+			numBusyCycles[index_cpu] += cycles;
+		}
         ppCycles->notify(cycles);
     }
 
@@ -1765,6 +1825,8 @@ FullO3CPU<Impl>::updateThreadPriority()
         activeThreads.push_back(high_thread);
     }
 }
+
+
 
 // Forward declaration of FullO3CPU.
 template class FullO3CPU<O3CPUImpl>;

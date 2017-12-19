@@ -398,6 +398,12 @@ class DefaultFetch
     /** The decoder. */
     TheISA::Decoder *decoder[Impl::MaxThreads];
 
+	Counter getICacheMissStallCycles(void)
+	{
+//		return this->fetchIcacheWaitRetryStallCycles.value();
+		return this->icacheStallCycles.value();
+	}
+
   private:
     DynInstPtr buildInst(ThreadID tid, StaticInstPtr staticInst,
                          StaticInstPtr curMacroop, TheISA::PCState thisPC,

@@ -100,6 +100,15 @@ class BaseCPU(MemObject):
     def export_methods(cls, code):
         code('''
     void switchOut();
+
+    void setCpuIndex(int i);
+    void extendIQEntries();
+    void extendROBEntries();
+    void extendLSQEntries();
+    void reduceIQEntries();
+    void reduceROBEntries();
+    void reduceLSQEntries();
+
     void takeOverFrom(BaseCPU *cpu);
     bool switchedOut();
     void flushTLBs();

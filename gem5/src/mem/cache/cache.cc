@@ -321,6 +321,32 @@ Cache::access(PacketPtr pkt, CacheBlk *&blk, Cycles &lat,
     DPRINTF(Cache, "%s %s\n", pkt->print(),
             blk ? "hit " + blk->print() : "miss");
 
+	using namespace SimClock;
+	if (name() == "system.cpu0.dcache")
+	{
+		if (!blk)
+			numDCacheMiss[0]++;			
+	}
+	else if (name() == "system.cpu1.dcache")
+	{
+		if (!blk)
+			numDCacheMiss[1]++;			
+	}
+	else if (name() == "system.cpu2.dcache")
+	{
+		if (!blk)
+			numDCacheMiss[2]++;			
+	}
+	else if (name() == "system.cpu3.dcache")
+	{
+		if (!blk)
+			numDCacheMiss[3]++;			
+	}
+	else if (name() == "system.l2")
+	{
+		if (!blk)
+			numL2CacheMiss[0]++;
+	}
 
     if (pkt->isEviction()) {
         // We check for presence of block in above caches before issuing

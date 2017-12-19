@@ -1703,12 +1703,12 @@ void DefaultCommit<Impl>::updateComInstStats(DynInstPtr &inst)
 		{
 			if(inst->isExecInIXU == true)
 			{
-				cpu->accelerateForFrontend(tid);
+				cpu->arbitrateForFrontend(tid);
 			}
 
 			if(inst->isLW == false)
 			{
-				cpu->accelerate(tid);
+				cpu->arbitrate(tid);
 			}
 		}
     }

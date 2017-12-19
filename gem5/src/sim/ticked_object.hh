@@ -87,8 +87,8 @@ class Ticked : public Serializable
             }
 			
 			/* JIP: big.LITTLE */
-			++SimClock::tickCycles;
-			++SimClock::numCycles;
+//			++SimClock::tickCycles;
+//			++SimClock::numCycles;
         }
     };
 
@@ -143,8 +143,12 @@ class Ticked : public Serializable
             countCycles(cyclesSinceLastStopped());
 			
 			/* JIP: big.LITTLE */
-			SimClock::numCycles += cyclesSinceLastStopped();
+//			SimClock::numCycles += cyclesSinceLastStopped();
+			SimClock::temp_numCycles = cyclesSinceLastStopped();
         }
+		/* JIP: big.LITTLE */
+		else
+			SimClock::temp_numCycles = 0;
     }
 
     /** How long have we been stopped for? */

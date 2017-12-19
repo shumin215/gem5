@@ -1,0 +1,1 @@
+*/home/shumin/benchmark/SPEC2006/403.gcc/exe/gcc_base.arm;/home/shumin/benchmark/SPEC2006/401.bzip2/exe/bzip2_base.arm* */home/shumin/benchmark/SPEC2006/403.gcc/data/test/input/cccp.i -o /home/shumin/benchmark/SPEC2006/403.gcc/data/ref/output/166.s;/home/shumin/benchmark/SPEC2006/401.bzip2/data/ref/input/input.source 280* ** 

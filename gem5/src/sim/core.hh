@@ -54,12 +54,20 @@ namespace SimClock {
 extern Tick Frequency; ///< The number of ticks that equal one second
 
 /* JIP: big core */
-extern double numBusyCycles;
-extern double numIdleCycles;
+extern double numBusyCycles[4];
+extern double numIdleCycles[4];
+
+extern double numICacheMissStallCycles[4];
+extern double numDispatchStallCycles[4];
+extern double numDCacheMiss[4];
+extern double numL2CacheMiss[4];
 
 /* JIP: LITTLE core */
-extern double tickCycles;
-extern double numCycles;
+extern double tickCycles[4];
+extern double numCycles[4];
+
+extern double temp_tickCycles;
+extern double temp_numCycles;
 
 namespace Float {
 
@@ -109,7 +117,20 @@ void doExitCleanup();
 
 //JIP:big.LITTLE
 double getCurFreq();
-double getCurBusyCycles(int i);
-double getCurIdleCycles(int i);
+double getCurBusyCycles(int i, int j);
+double getCurIdleCycles(int i, int j);
+
+double getCurICacheMissStallCycles(int i);
+double getDispatchStallCycles(int i);
+double getCurDCacheMiss(int i);
+double getCurL2CacheMiss(int i);
+
+// Shumin:LYRIC
+//void extendIQEntries(void);
+//void extendROBEntries(void);
+//void extendLSQEntries(void);
+//void reduceIQEntries(void);
+//void reduceROBEntries(void);
+//void reduceLSQEntries(void);
 
 #endif /* __SIM_CORE_HH__ */

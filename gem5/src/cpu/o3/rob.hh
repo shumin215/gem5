@@ -196,6 +196,17 @@ class ROB
 		this->numEntries--;
 	}
 
+    // Shumin:LYRIC implementation
+    void setLargeWindowMode(void)
+    {
+//        this->numEntries += 2;
+    }
+    // Shumin:LYRIC implementation
+    void resetLargeWindowMode(void)
+    {
+//        this->numEntries -= 8;
+    }
+
 	void squashBQ(InstSeqNum seq_num, ThreadID tid);
 
 	bool isSquashDetectedOnce(InstSeqNum seq_num, ThreadID tid);

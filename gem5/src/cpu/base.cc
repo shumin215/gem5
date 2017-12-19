@@ -516,6 +516,32 @@ BaseCPU::switchOut()
     flushTLBs();
 }
 
+//big.LITTLE implementation - JIP
+void
+BaseCPU::setCpuIndex(int i)
+{
+	
+}
+
+void BaseCPU::extendIQEntries(void)
+{
+}
+void BaseCPU::extendROBEntries(void)
+{
+}
+void BaseCPU::extendLSQEntries(void)
+{
+}
+void BaseCPU::reduceIQEntries(void)
+{
+}
+void BaseCPU::reduceROBEntries(void)
+{
+}
+void BaseCPU::reduceLSQEntries(void)
+{
+}
+
 void
 BaseCPU::takeOverFrom(BaseCPU *oldCPU)
 {

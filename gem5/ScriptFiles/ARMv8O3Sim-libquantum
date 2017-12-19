@@ -1,0 +1,137 @@
+#!/bin/bash
+
+#######################################################
+# 	Fast Forward: 100000000
+######################################################
+
+#Configurations
+MAX_INST=500000000
+
+#Benchmark Name
+benchmark_spec_int=("400.perlbench" "401.bzip2" "403.gcc" "445.gobmk" "458.sjeng" "464.h264ref" "473.astar" "999.specrand" "429.mcf" "456.hmmer" "462.libquantum" "471.omnetpp" "483.xalancbmk")
+benchmark_spec_fp=("410.bwaves" "433.milc" "435.gromacs" "437.leslie3d" "447.dealII" "453.povray" "459.GemsFDTD" "470.lbm" "482.sphinx3" "416.gamess" "434.zeusmp" "436.cactusADM" "444.namd" "450.soplex" "454.calculix" "465.tonto" "998.specrand")
+
+#Benchmark List
+program_list_spce_int_all="perlbench bzip2 gcc gobmk sjeng h264ref astar specrand mcf hmmer libquantum omnetpp xalancbmk"
+program_list_spce_fp_all="bwaves milc gromacs leslie3d dealII povray GemsFDTD lbm sphinx3 gamess zeusmp cactusADM namd soplex calculix tonto specrand"
+
+#Runnable Application List
+program_list_spec_runable="bzip2 gcc astar mcf hmmer libquantum sjeng soplex cactusADM calculix"
+program_list_parsec_runable="blackscholes freqmine fluidanimate"
+
+#Running List
+Running_app="libquantum"
+
+#Path Configurations
+spec_benchmark_path=/home/shumin/benchmark/SPEC2006
+spec_source_root=/home/shumin/benchmark/SPEC2006
+parsec_benchmark_path=/home/shumin/benchmark/PARSEC-2.1
+parsec_source_root=/home/shumin/benchmark/PARSEC-2.1
+simresult_root=/home/shumin/workspace/LG_Result/SimulationResult
+output_path=/home/shumin/workspace/LG_Result/SimulationResult/m5out
+gem5_binary_path=./gem5-opt
+se_file_path=/home/shumin/LG_Project/gem5/configs/example
+config_root=/home/shumin/LG_Project/gem5/configs/common
+config_name=$1
+front_cfg=$2
+back_cfg=$3
+
+# Benchmark environment registration
+# SPEC2006 INT
+echo "*${spec_benchmark_path}/401.bzip2/exe/bzip2_base.arm* *${spec_source_root}/401.bzip2/data/ref/input/input.source 280* ** " > bzip2
+echo "*${spec_benchmark_path}/403.gcc/exe/gcc_base.arm* *${spec_source_root}/403.gcc/data/test/input/cccp.i -o ${spec_source_root}/403.gcc/data/ref/output/166.s* ** " > gcc
+echo "*${spec_benchmark_path}/473.astar/exe/astar_base.arm* *${spec_source_root}/473.astar/data/ref/input/rivers.cfg* ** ** " > astar
+echo "*${spec_benchmark_path}/429.mcf/exe/mcf_base.arm* *${spec_source_root}/429.mcf/data/ref/input/inp.in* ** " > mcf
+echo "*${spec_benchmark_path}/456.hmmer/exe/hmmer_base.arm* *${spec_source_root}/456.hmmer/data/ref/input/nph3.hmm ${spec_source_root}/456.hmmer/data/ref/input/swiss41* ** " > hmmer
+echo "*${spec_benchmark_path}/462.libquantum/exe/libquantum_base.arm* *1397,8* ** " > libquantum
+echo "*${spec_benchmark_path}/458.sjeng/exe/sjeng_base.arm* *${spec_source_root}/458.sjeng/data/ref/input/ref.txt* ** " > sjeng
+
+# SPEC2006 FP
+echo "*${spec_benchmark_path}/450.soplex/exe/soplex_base.arm* *${spec_source_root}/450.soplex/data/ref/input/ref.mps* ** " > soplex
+echo "*${spec_benchmark_path}/436.cactusADM/exe/cactusADM_base.arm* *${spec_source_root}/436.cactusADM/data/ref/input/benchADM.par* ** " > cactusADM
+echo "*${spec_benchmark_path}/454.calculix/exe/calculix_base.arm* *${spec_source_root}/454.calculix/data/ref/input/hyperviscoplastic* ** " > calculix
+
+#PARSEC
+echo "*${parsec_benchmark_path}/pkgs/apps/blackscholes/inst/gcc-arm.gcc-arm/bin/blackscholes* *1 ${parsec_source_root}/pkgs/apps/blackscholes/inputs/in_10M.txt prices.txt* ** " > blackscholes
+echo "*${parsec_benchmark_path}/pkgs/apps/freqmine/obj/gcc-arm.gcc-arm/freqmine* *${parsec_source_root}/pkgs/apps/freqmine/inputs/kosarak_250k.dat 220* ** " > freqmine
+echo "*${parsec_benchmark_path}/pkgs/apps/fluidanimate/obj/gcc-arm.gcc-arm/fluidanimate* *1 5 ${parsec_source_root}/pkgs/apps/fluidanimate/inputs/in_500K.fluid out.fluid* ** " > fluidanimate
+
+#Dual-Core SPEC
+echo "*${spec_benchmark_path}/403.gcc/exe/gcc_base.arm;${spec_benchmark_path}/401.bzip2/exe/bzip2_base.arm* *${spec_source_root}/403.gcc/data/test/input/cccp.i -o ${spec_source_root}/403.gcc/data/ref/output/166.s;${spec_source_root}/401.bzip2/data/ref/input/input.source 280* ** " > gcc_bzip2
+echo "*${spec_benchmark_path}/429.mcf/exe/mcf_base.arm;${spec_benchmark_path}/458.sjeng/exe/sjeng_base.arm* *${spec_source_root}/429.mcf/data/ref/input/inp.in;${spec_source_root}/458.sjeng/data/ref/input/ref.txt* ** " > mcf_sjeng
+echo "*${spec_benchmark_path}/473.astar/exe/astar_base.arm;${parsec_benchmark_path}/pkgs/apps/blackscholes/inst/gcc-arm.gcc-arm/bin/blackscholes* *${spec_source_root}/473.astar/data/ref/input/rivers.cfg;1 ${parsec_source_root}/pkgs/apps/blackscholes/inputs/in_10M.txt prices.txt* ** " > astar_blackscholes
+echo "*${parsec_benchmark_path}/pkgs/apps/freqmine/obj/gcc-arm.gcc-arm/freqmine;${parsec_benchmark_path}/pkgs/apps/fluidanimate/obj/gcc-arm.gcc-arm/fluidanimate* *${parsec_source_root}/pkgs/apps/freqmine/inputs/kosarak_250k.dat 220;1 5 ${parsec_source_root}/pkgs/apps/fluidanimate/inputs/in_500K.fluid out.fluid* ** " > freqmine_fluidanimate
+echo "*${spec_benchmark_path}/436.cactusADM/exe/cactusADM_base.arm;${spec_benchmark_path}/454.calculix/exe/calculix_base.arm* *${spec_source_root}/436.cactusADM/data/ref/input/benchADM.par;${spec_source_root}/454.calculix/data/ref/input/hyperviscoplastic* ** " > cactusADM_calculix
+
+echo "*${spec_benchmark_path}/401.bzip2/exe/bzip2_base.arm;${spec_benchmark_path}/454.calculix/exe/calculix_base.arm* *${spec_source_root}/401.bzip2/data/ref/input/input.source 280;${spec_source_root}/454.calculix/data/ref/input/hyperviscoplastic* ** " > bzip2_calculix
+echo "*${spec_benchmark_path}/403.gcc/exe/gcc_base.arm;${parsec_benchmark_path}/pkgs/apps/freqmine/obj/gcc-arm.gcc-arm/freqmine* *${spec_source_root}/403.gcc/data/test/input/cccp.i -o ${spec_source_root}/403.gcc/data/ref/output/166.s;${parsec_source_root}/pkgs/apps/freqmine/inputs/kosarak_250k.dat 220* ** " > gcc_freqmine
+echo "*${spec_benchmark_path}/429.mcf/exe/mcf_base.arm;${parsec_benchmark_path}/pkgs/apps/fluidanimate/obj/gcc-arm.gcc-arm/fluidanimate* *${spec_source_root}/429.mcf/data/ref/input/inp.in;1 5 ${parsec_source_root}/pkgs/apps/fluidanimate/inputs/in_500K.fluid out.fluid* ** " > mcf_fluidanimate
+echo "*${spec_benchmark_path}/458.sjeng/exe/sjeng_base.arm;${spec_benchmark_path}/473.astar/exe/astar_base.arm* *${spec_source_root}/458.sjeng/data/ref/input/ref.txt;${spec_source_root}/473.astar/data/ref/input/rivers.cfg* ** " > sjeng_astar
+echo "*${spec_benchmark_path}/436.cactusADM/exe/cactusADM_base.arm;${parsec_benchmark_path}/pkgs/apps/blackscholes/inst/gcc-arm.gcc-arm/bin/blackscholes* *${spec_source_root}/436.cactusADM/data/ref/input/benchADM.par;1 ${parsec_source_root}/pkgs/apps/blackscholes/inputs/in_10M.txt prices.txt* ** " > cactusADM_blackscholes
+
+
+for bench in ${Running_app}; do
+
+ixuWidth_num="2"
+for ixuWidth in ${ixuWidth_num}; do
+
+ixuDepth_num="2"
+for ixuDepth in ${ixuDepth_num}; do
+
+	if [ ${ixuWidth} -lt ${ixuDepth} ]
+	then
+		echo "IXU Width: ${ixuWidth}, IXU Depth: ${ixuDepth} Unnecessary!";
+		continue;
+	fi
+IQ_conf="64"
+for IQConf in ${IQ_conf}; do
+
+forward_conf="100000000"
+for forwardNum in ${forward_conf}; do
+
+bundle_conf="${back_cfg}"
+for bundleCommit in ${bundle_conf}; do
+
+mov_conf="${front_cfg}"
+for PIXU in ${mov_conf}; do
+            
+    echo "######## ${bench} IXU width: ${ixuWidth}, IXU depth: ${ixuDepth}, MOV Elimination: ${PIXU} ########"
+
+    # Modify configure file
+    echo "{if (NR == 135) print \"    ixuWidth = ${ixuWidth}\" > \"${config_root}/O3_ARM_v7a.abc\";
+           else if (NR == 136) print \"    ixuDepth = ${ixuDepth}\" > \"${config_root}/O3_ARM_v7a.abc\";
+           else if (NR == 134) print \"    isIXUUsed = ${PIXU}\" > \"${config_root}/O3_ARM_v7a.abc\";
+		   else if (NR == 149) print \"    numIQEntries = ${IQConf}\" > \"${config_root}/O3_ARM_v7a.abc\";
+		   else if (NR == 150) print \"    isBundleCommitUsed = ${bundleCommit}\" > \"${config_root}/O3_ARM_v7a.abc\";
+           else print \$0 > \"${config_root}/O3_ARM_v7a.abc\"}" > awkprog
+
+    echo "{print \$0 > \"${config_root}/O3_ARM_v7a.py\"}" > awkprog1
+            
+    awk -f awkprog ${config_root}/O3_ARM_v7a.py
+
+    awk -f awkprog1 ${config_root}/O3_ARM_v7a.abc
+            
+    exe=`awk -F'*' '{print $2}' $bench`
+    args=`awk -F'*' '{print $4}' $bench`
+    stdin=`awk -F'*' '{print $6}' $bench`
+                                                                                                                                           
+	echo `gem5.opt --outdir=${output_path}_${config_name}_Front:${PIXU}_Back:${bundleCommit}_IQ${IQConf} --stats-file=${bench}_${config_name}_Front:${PIXU}_Back:${bundleCommit}_IQ${IQConf} ${se_file_path}/se.py --cpu-type=arm_detailed --sys-clock=1GHz --cpu-clock=1GHz --num-cpus=1 --caches --l2cache --mem-type=DDR3_1600_8x8 --mem-size=8192MB --maxinst=$MAX_INST --cmd=$exe --options="${args}" &> $simresult_root/${bench}_${config_name}_Front:${PIXU}_Back:${bundleCommit}_IQ${IQConf}`
+                                                                                                                                           
+    echo "**************** ${bench} is finished **************"
+
+done
+
+done
+
+done
+
+done
+
+done
+
+done
+                                                                                                                                           
+done
+
+#rm ${config_root}/O3_ARM_v7a.abc
+

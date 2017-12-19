@@ -90,8 +90,21 @@ class Checkpoint;
 
 /* JIP: big.LITTLE */
 double getCurFreq();
-double getCurBusyCycles(int i);
-double getCurIdleCycles(int i);
+double getCurBusyCycles(int i, int j);
+double getCurIdleCycles(int i, int j);
+double getCurICacheMissStallCycles(int i);
+double getDispatchStallCycles(int i);
+double getCurDCacheMiss(int i);
+double getCurL2CacheMiss(int i);
+
+/* Shumin: LYRIC 
+void extendIQEntries(void);
+void extendROBEntries(void);
+void extendLSQEntries(void);
+void reduceIQEntries(void);
+void reduceROBEntries(void);
+void reduceLSQEntries(void);
+*/
 
 void serializeAll(const std::string &cpt_dir);
 CheckpointIn *getCheckpoint(const std::string &cpt_dir);

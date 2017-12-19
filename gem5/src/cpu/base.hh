@@ -325,6 +325,18 @@ class BaseCPU : public MemObject
      */
     virtual void switchOut();
 
+	/* big.LITTLE implementation - JIP */
+	virtual void setCpuIndex(int i);
+
+    /* Shumin: LYRIC */
+    virtual void extendIQEntries(void);
+    virtual void extendROBEntries(void);
+    virtual void extendLSQEntries(void);
+
+    virtual void reduceIQEntries(void);
+    virtual void reduceROBEntries(void);
+    virtual void reduceLSQEntries(void);
+
     /**
      * Load the state of a CPU from the previous CPU object, invoked
      * on all new CPUs that are about to be switched in.

@@ -368,6 +368,18 @@ class FullO3CPU : public BaseO3CPU
     /** Switches out this CPU. */
     void switchOut() override;
 
+	/* big.LITTLE implementation - JIP */
+	void setCpuIndex(int i);
+
+    /* Shumin:LYRIC */
+    void extendIQEntries(void);
+    void extendROBEntries(void);
+    void extendLSQEntries(void);
+
+    void reduceIQEntries(void);
+    void reduceROBEntries(void);
+    void reduceLSQEntries(void);
+
     /** Takes over from another CPU. */
     void takeOverFrom(BaseCPU *oldCPU) override;
 
@@ -455,9 +467,9 @@ class FullO3CPU : public BaseO3CPU
     void pcState(const TheISA::PCState &newPCState, ThreadID tid);
 
 	// Accelerate
-	void accelerate(ThreadID tid);
+	void arbitrate(ThreadID tid);
 
-	void accelerateForFrontend(ThreadID tid);
+	void arbitrateForFrontend(ThreadID tid);
 
     /** Reads the commit PC state of a specific thread. */
     TheISA::PCState pcState(ThreadID tid);
@@ -651,6 +663,9 @@ class FullO3CPU : public BaseO3CPU
     ThreadID getFreeTid();
 
   public:
+	/** big.LITTLE implementation - JIP **/	
+	int index_cpu;
+
     /** Returns a pointer to a thread context. */
     ThreadContext *
     tcBase(ThreadID tid)

@@ -302,6 +302,11 @@ class DefaultIEW
      */
     void tick();
 
+	Counter getBlockedCycles(void)
+	{
+		return this->iewBlockCycles.value();
+	}
+
   private:
 
 	/* Gets latency of an instruction */

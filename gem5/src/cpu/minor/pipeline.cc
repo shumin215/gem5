@@ -123,6 +123,10 @@ Pipeline::minorTrace() const
 void
 Pipeline::evaluate()
 {
+	/* JIP: big.LITTLE */
+	++SimClock::tickCycles[cpu.index_cpu];
+	++SimClock::numCycles[cpu.index_cpu];
+
     /* Note that it's important to evaluate the stages in order to allow
      *  'immediate', 0-time-offset TimeBuffer activity to be visible from
      *  later stages to earlier ones in the same cycle */

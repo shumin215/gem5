@@ -110,6 +110,19 @@ class LSQ {
     /** Inserts a store into the LSQ. */
     void insertStore(DynInstPtr &store_inst);
 
+    /* Shumin:LYRIC implementation */
+    void setLargeWindowMode(void)
+    {
+        this->maxLQEntries += 8;
+        this->maxSQEntries += 8;
+    }
+    /* Shumin:LYRIC implementation */
+    void resetLargeWindowMode(void)
+    {
+        this->maxLQEntries -= 8;
+        this->maxSQEntries -= 8;
+    }
+
     /** Executes a load. */
     Fault executeLoad(DynInstPtr &inst);
 

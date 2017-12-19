@@ -176,10 +176,47 @@ def simulate(*args, **kwargs):
 #JIP:big.LITTLE
 def getCurFreq():
     return _m5.core.getCurFreq()
-def getCurBusyCycles(i):
-    return _m5.core.getCurBusyCycles(i)
-def getCurIdleCycles(i):
-    return _m5.core.getCurIdleCycles(i)
+def getCurBusyCycles(i, j):
+    return _m5.core.getCurBusyCycles(i, j)
+def getCurIdleCycles(i, j):
+    return _m5.core.getCurIdleCycles(i, j)
+
+def getCurICacheMissStallCycles(i):
+    return _m5.core.getCurICacheMissStallCycles(i)
+def getDispatchStallCycles(i):
+    return _m5.core.getDispatchStallCycles(i)
+def getCurDCacheMiss(i):
+    return _m5.core.getCurDCacheMiss(i)
+def getCurL2CacheMiss(i):
+    return _m5.core.getCurL2CacheMiss(i)
+
+
+def setCpuIndex(cpuList): 
+    if not isinstance(cpuList, list):
+        raise RuntimeError, "Must pass a list to this function"
+    for item in cpuList:
+        if not isinstance(item, tuple) or len(item) != 2:
+            raise RuntimeError, "List must have tuples of (oldCPU,newCPU)"
+
+    cpu_index = 0
+			
+    for old_cpu, new_cpu in cpuList:
+        old_cpu.setCpuIndex(cpu_index)
+        new_cpu.setCpuIndex(cpu_index)
+        cpu_index += 1
+
+# Shumin: LYRIC
+# old_cpu = current core, extendIW function is always called 
+# when current core is big core
+def extendIW(cpuList):
+     cpuList[0].extendIQEntries()
+     cpuList[0].extendROBEntries()
+     cpuList[0].extendLSQEntries()
+
+def reduceIW(cpuList):
+     cpuList[0].reduceIQEntries()
+     cpuList[0].reduceROBEntries()
+     cpuList[0].reduceLSQEntries()
 	
 def drain():
     """Drain the simulator in preparation of a checkpoint or memory mode

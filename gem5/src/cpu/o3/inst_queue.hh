@@ -198,6 +198,17 @@ class InstructionQueue
      */
     void insertBarrier(DynInstPtr &barr_inst);
 
+    /* Shumin:LYRIC implementation */
+    void setLargeWindowMode(void)
+    {
+//        this->numEntries += 1;
+    }
+    /* Shumin:LYRIC implementation */
+    void resetLargeWindowMode(void)
+    {
+//        this->numEntries -= 10;
+    }
+
     /** Returns the oldest scheduled instruction, and removes it from
      * the list of instructions waiting to execute.
      */

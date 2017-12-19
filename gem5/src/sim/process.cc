@@ -119,7 +119,7 @@ Process::Process(ProcessParams * params, ObjectFile * obj_file)
 
     auto ret_pair = system->PIDs.emplace(_pid);
     if (!ret_pair.second)
-        fatal("_pid %d is already used", _pid);
+//        fatal("_pid %d is already used", _pid);
 
     /**
      * Linux bundles together processes into this concept called a thread

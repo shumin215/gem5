@@ -264,6 +264,40 @@ MinorCPU::switchOut()
     activityRecorder->reset();
 }
 
+//big.LITTLE implementation - JIP
+void
+MinorCPU::setCpuIndex(int i)
+{
+    DPRINTF(MinorCPU, "Set CPU Index: %d\n", i);
+    
+	index_cpu = i;
+}
+
+// Shumin:LYRIC
+void MinorCPU::extendIQEntries(void)
+{
+}
+// Shumin:LYRIC
+void MinorCPU::extendROBEntries(void)
+{
+}
+// Shumin:LYRIC
+void MinorCPU::extendLSQEntries(void)
+{
+}
+// Shumin:LYRIC
+void MinorCPU::reduceIQEntries(void)
+{
+}
+// Shumin:LYRIC
+void MinorCPU::reduceROBEntries(void)
+{
+}
+// Shumin:LYRIC
+void MinorCPU::reduceLSQEntries(void)
+{
+}
+
 void
 MinorCPU::takeOverFrom(BaseCPU *old_cpu)
 {
@@ -309,6 +343,9 @@ MinorCPU::wakeupOnEvent(unsigned int stage_id)
     /* Mark that some activity has taken place and start the pipeline */
     activityRecorder->activateStage(stage_id);
     pipeline->start();
+
+	/* JIP: big.LITTLE */
+	SimClock::numCycles[index_cpu] += SimClock::temp_numCycles;
 }
 
 MinorCPU *

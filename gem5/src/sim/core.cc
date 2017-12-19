@@ -47,12 +47,22 @@ namespace SimClock {
 Tick Frequency;
 
 //JIP: big core
-double numBusyCycles;
-double numIdleCycles;
+double numBusyCycles[4];
+double numIdleCycles[4];
+
+//JIP: big core stat
+double numBrMiss[4];
+double numICacheMissStallCycles[4];
+double numDispatchStallCycles[4];
+double numDCacheMiss[4];
+double numL2CacheMiss[4];
 
 //JIP: LITTLE core
-double tickCycles;
-double numCycles;
+double tickCycles[4];
+double numCycles[4];
+
+double temp_tickCycles;
+double temp_numCycles;
 
 namespace Float {
 double s;
@@ -145,18 +155,38 @@ double getCurFreq()
 	return SimClock::Frequency;
 }
 
-double getCurBusyCycles(int i)
+double getCurBusyCycles(int i, int j)
 {
 	if (i == 0)
-		return SimClock::numBusyCycles;
+		return SimClock::numBusyCycles[j];
 	else
-		return SimClock::numCycles;
+		return SimClock::numCycles[j];
 }
 
-double getCurIdleCycles(int i)
+double getCurIdleCycles(int i, int j)
 {
 	if (i == 0)
-		return SimClock::numIdleCycles;
+		return SimClock::numIdleCycles[j];
 	else
-		return SimClock::tickCycles;
+		return SimClock::tickCycles[j];
+}
+	
+double getCurICacheMissStallCycles(int i)
+{
+	return SimClock::numICacheMissStallCycles[i];
+}
+
+double getDispatchStallCycles(int i)
+{
+	return SimClock::numDispatchStallCycles[i];
+}
+
+double getCurDCacheMiss(int i)
+{
+	return SimClock::numDCacheMiss[i];
+}
+
+double getCurL2CacheMiss(int i)
+{
+	return SimClock::numL2CacheMiss[i];
 }
